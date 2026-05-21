@@ -142,7 +142,7 @@ export default function Turma() {
     <div className="flex flex-col gap-6">
       <HeaderComVoltar 
         titulo={nomeTurma || 'Carregando...'}
-        onVoltar={() => navigate('/Dashboard')}
+        onVoltar={() => navigate(-1)}
       />
 
       {/* filtro */}

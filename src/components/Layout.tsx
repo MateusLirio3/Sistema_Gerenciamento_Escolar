@@ -16,18 +16,6 @@ import {
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 
-const menu = [
-  { label: 'Dashboard', icon: LayoutDashboard, to: '/Dashboard' },
-  { label: 'Turmas', icon: BookOpen, to: '/turmas' },
-  { label: 'Alunos', icon: '/alunos', to: '/alunos' },
-  { label: 'Notas', icon: ClipboardList, to: '/lancamento-notas' },
-  { label: 'Importação', icon: Upload, to: '/importar' },
-  { label: 'Boletins', icon: FileDown, to: '/boletins' },
-  { label: 'Disciplinas', icon: BookOpen, to: '/disciplinas' },
-  { label: 'Áreas', icon: GraduationCap, to: '/areas' },
-  { label: 'Vincular disciplina', icon: GraduationCap, to: '/vincular-disciplina' }
-]
-
 const menuItems = [
   { label: 'Dashboard', icon: LayoutDashboard, to: '/Dashboard' },
   { label: 'Turmas', icon: BookOpen, to: '/turmas' },
@@ -37,7 +25,8 @@ const menuItems = [
   { label: 'Boletins', icon: FileDown, to: '/boletins' },
   { label: 'Disciplinas', icon: BookOpen, to: '/disciplinas' },
   { label: 'Áreas', icon: GraduationCap, to: '/areas' },
-  { label: 'Vincular disciplina', icon: GraduationCap, to: '/vincular-disciplina' }
+  { label: 'Vincular disciplina', icon: GraduationCap, to: '/vincular-disciplina' },
+  { label: 'Etapas', icon: CalendarDays, to: '/etapas' },
 
 ]
 

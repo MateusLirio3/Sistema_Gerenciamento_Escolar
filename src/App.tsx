@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import PrivateRoute from './components/privateroute'
 import Layout from './components/Layout'
 
@@ -16,6 +16,7 @@ import Disciplinas from './pages/Disciplinas'
 import Areas from './pages/Areas'
 import BoletimPage from './pages/Boletimpage'
 import VincularDisciplina from './pages/VincularDisciplinas'
+import Etapa from './pages/Etapa'
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
       <Routes>
         {/* Rota pública */}
         <Route path="/login" element={<Login />} />
+        <Route path='/' element={<Navigate to="/login" replace />} />
 
         {/* Rotas privadas — todas usam o lLayout com sidebar */}
         <Route
@@ -44,6 +46,8 @@ export default function App() {
           <Route path='/areas' element={<Areas />} />
           <Route path='/boletim/:alunoID' element={<BoletimPage />} />
           <Route path='/vincular-disciplina' element={<VincularDisciplina />} />
+          <Route path="/etapas" element={<Etapa />} />
+          
         </Route>
       </Routes>
     </BrowserRouter>

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
 export type Turma = { id: string; nome: string; ano: number }
-export type Aluno = { id: string; nome: string; turma_id: string | null }
+export type Aluno = { id: string; nome: string; matricula: bigint | null; turma_id: string | null }
 export type Nota = {
   id: string
   aluno_id: string | null

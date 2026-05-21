@@ -7,7 +7,14 @@ import {
   Upload,
   CheckCircle2,
 } from 'lucide-react'
-import { useSchoolData, formatNumber, type Turma, type Aluno, type Nota } from '../hooks/useSchoolData'
+import {
+  useSchoolData,
+  formatNumber,
+  type Turma,
+  type Aluno,
+  type Nota,
+  type TurmaDisciplina,
+} from '../hooks/useSchoolData'
 import { LoadingState, ErrorState, EmptyState } from '../components/States'
 
 // ─── StatCard ─────────────────────────────────────────────────────────────────
@@ -45,16 +52,21 @@ function TurmasPanel({
   turmas,
   alunos,
   notas,
+  turmaDisciplinas,
 }: {
   turmas: Turma[]
   alunos: Aluno[]
   notas: Nota[]
+  turmaDisciplinas: TurmaDisciplina[]
 }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
       <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
         <h2 className="text-lg font-semibold text-gray-900">Turmas em andamento</h2>
-        <Link to="/turmas" className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors" >
+        <Link
+          to="/turmas"
+          className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+        >
           Nova turma
         </Link>
       </div>
@@ -64,15 +76,21 @@ function TurmasPanel({
         ) : (
           turmas.map((turma) => {
             const alunosTurma = alunos.filter((a) => a.turma_id === turma.id)
-            const alunosComNota = new Set(
-              notas
-                .filter((n) => alunosTurma.some((a) => a.id === n.aluno_id))
-                .map((n) => n.aluno_id)
-            ).size
-            const progress = alunosTurma.length
-              ? Math.round((alunosComNota / alunosTurma.length) * 100)
-              : 0
-            const pendencias = Math.max(alunosTurma.length - alunosComNota, 0)
+            const disciplinasDaTurma = turmaDisciplinas
+              .filter((td) => td.turma_id === turma.id)
+              .map((td) => td.disciplina_id)
+
+            // Progresso: pares (aluno × disciplina) que têm pelo menos 1 nota lançada
+            const totalPares = alunosTurma.length * disciplinasDaTurma.length
+            const paresComNota = notas.filter(
+              (n) =>
+                n.nota !== null &&
+                alunosTurma.some((a) => a.id === n.aluno_id) &&
+                disciplinasDaTurma.includes(n.disciplina_id ?? '')
+            ).length
+
+            const progress = totalPares ? Math.round((paresComNota / totalPares) * 100) : 0
+            const pendencias = Math.max(totalPares - paresComNota, 0)
 
             return (
               <div
@@ -122,15 +140,14 @@ function AcoesPanel({
   notas: number
 }) {
   const items = [
-    `${turmas} turmas cadastradas`,
-    `${alunos} alunos cadastrados`,
-    `${notas} notas lançadas`,
-    'Conferir permissões antes de liberar produção',
+    `${turmas} turma${turmas !== 1 ? 's' : ''} cadastrada${turmas !== 1 ? 's' : ''}`,
+    `${alunos} aluno${alunos !== 1 ? 's' : ''} cadastrado${alunos !== 1 ? 's' : ''}`,
+    `${notas} nota${notas !== 1 ? 's' : ''} lançada${notas !== 1 ? 's' : ''}`,
   ]
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
       <div className="border-b border-gray-100 px-6 py-4">
-        <h2 className="text-lg font-semibold text-gray-900">Fila de ações</h2>
+        <h2 className="text-lg font-semibold text-gray-900">Resumo do sistema</h2>
       </div>
       <div className="space-y-3 p-6">
         {items.map((item) => (
@@ -149,7 +166,7 @@ function AcoesPanel({
 function QuickActions() {
   const navigate = useNavigate()
   const actions = [
-    { label: 'Lançar notas por turma', icon: ClipboardList, path: '/disciplinas' },
+    { label: 'Lançar notas por turma', icon: ClipboardList, path: '/notas/lancamento-massa' },
     { label: 'Importar planilha XLSX', icon: Upload, path: '/importar' },
     { label: 'Gerar boletim individual', icon: FileDown, path: '/boletins' },
   ]
@@ -174,18 +191,62 @@ function QuickActions() {
   )
 }
 
+// ─── Helpers de média ─────────────────────────────────────────────────────────
+
+/**
+ * Calcula a média correta: agrupa notas por disciplina → média de cada disciplina
+ * → média das médias. Evita distorção por quantidade de etapas lançadas por disciplina.
+ */
+function calcularMediaAluno(notasAluno: Nota[]): number | null {
+  if (notasAluno.length === 0) return null
+
+  const grupos = notasAluno.reduce<Record<string, number[]>>((acc, n) => {
+    const key = n.disciplina_id ?? 'sem'
+    if (!acc[key]) acc[key] = []
+    acc[key].push(Number(n.nota))
+    return acc
+  }, {})
+
+  const mediasPorDisciplina = Object.values(grupos).map(
+    (ns) => ns.reduce((a, b) => a + b, 0) / ns.length
+  )
+
+  return mediasPorDisciplina.reduce((a, b) => a + b, 0) / mediasPorDisciplina.length
+}
+
+/**
+ * Retorna true se o aluno tem pelo menos 1 nota em cada disciplina vinculada à turma.
+ */
+function calcularStatusAluno(
+  aluno: Aluno,
+  notasAluno: Nota[],
+  turmaDisciplinas: TurmaDisciplina[]
+): boolean {
+  const disciplinasDaTurma = turmaDisciplinas
+    .filter((td) => td.turma_id === aluno.turma_id)
+    .map((td) => td.disciplina_id)
+
+  if (disciplinasDaTurma.length === 0) return false
+
+  const disciplinasComNota = new Set(notasAluno.map((n) => n.disciplina_id))
+  return disciplinasDaTurma.every((id) => disciplinasComNota.has(id))
+}
+
 // ─── AlunosRecentes ───────────────────────────────────────────────────────────
 
 function AlunosRecentes({
   alunos,
   turmas,
   notas,
+  turmaDisciplinas,
 }: {
   alunos: Aluno[]
   turmas: Turma[]
   notas: Nota[]
+  turmaDisciplinas: TurmaDisciplina[]
 }) {
   const navigate = useNavigate()
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
       <div className="border-b border-gray-100 px-6 py-4">
@@ -214,9 +275,9 @@ function AlunosRecentes({
                 const notasAluno = notas.filter(
                   (n) => n.aluno_id === student.id && n.nota !== null
                 )
-                const media = notasAluno.length
-                  ? notasAluno.reduce((sum, n) => sum + Number(n.nota), 0) / notasAluno.length
-                  : null
+
+                const media = calcularMediaAluno(notasAluno)
+                const statusCompleto = calcularStatusAluno(student, notasAluno, turmaDisciplinas)
 
                 return (
                   <tr
@@ -246,12 +307,18 @@ function AlunosRecentes({
                     <td className="px-6 py-3.5">
                       <span
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          notasAluno.length
+                          statusCompleto
                             ? 'bg-green-50 text-green-700'
-                            : 'bg-amber-50 text-amber-700'
+                            : notasAluno.length
+                            ? 'bg-amber-50 text-amber-700'
+                            : 'bg-red-50 text-red-600'
                         }`}
                       >
-                        {notasAluno.length ? 'Com notas' : 'Nota pendente'}
+                        {statusCompleto
+                          ? 'Com notas'
+                          : notasAluno.length
+                          ? 'Incompleto'
+                          : 'Pendente'}
                       </span>
                     </td>
                   </tr>
@@ -273,23 +340,21 @@ export default function Dashboard() {
   if (isLoading) return <LoadingState />
   if (error) return <ErrorState message={error} />
 
-  const turmas = data?.turmas ?? []
-  const alunos = data?.alunos ?? []
-  const notas = data?.notas ?? []
-  const boletinsEstimados = new Set(notas.map((n) => n.aluno_id).filter(Boolean)).size
-  const mediaGeral = notas.length
-    ? notas.reduce((sum, n) => sum + Number(n.nota ?? 0), 0) / notas.length
-    : 0
+  const turmas           = data?.turmas           ?? []
+  const alunos           = data?.alunos           ?? []
+  const notas            = data?.notas            ?? []
+  const turmaDisciplinas = data?.turmaDisciplinas ?? []
+
+  // Boletins prontos = alunos que têm notas em todas as disciplinas da turma
+  const boletinsProntos = alunos.filter((a) => {
+    const notasAluno = notas.filter((n) => n.aluno_id === a.id && n.nota !== null)
+    return calcularStatusAluno(a, notasAluno, turmaDisciplinas)
+  }).length
 
   const stats = [
-    { label: 'Turmas ativas', value: String(turmas.length), detail: 'cadastradas', icon: BookOpen },
-    { label: 'Alunos', value: String(alunos.length), detail: 'matriculados', icon: UsersRound },
-    {
-      label: 'Boletins prontos',
-      value: String(boletinsEstimados),
-      detail: 'alunos com nota',
-      icon: FileDown,
-    },
+    { label: 'Turmas ativas',    value: String(turmas.length),    detail: 'cadastradas',   icon: BookOpen    },
+    { label: 'Alunos',           value: String(alunos.length),    detail: 'matriculados',  icon: UsersRound  },
+    { label: 'Boletins prontos', value: String(boletinsProntos),  detail: 'notas completas', icon: FileDown  },
   ]
 
   return (
@@ -303,14 +368,24 @@ export default function Dashboard() {
 
       {/* Turmas + Ações */}
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <TurmasPanel turmas={turmas} alunos={alunos} notas={notas} />
+        <TurmasPanel
+          turmas={turmas}
+          alunos={alunos}
+          notas={notas}
+          turmaDisciplinas={turmaDisciplinas}
+        />
         <AcoesPanel turmas={turmas.length} alunos={alunos.length} notas={notas.length} />
       </div>
 
       {/* Quick Actions + Alunos */}
       <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
         <QuickActions />
-        <AlunosRecentes alunos={alunos} turmas={turmas} notas={notas} />
+        <AlunosRecentes
+          alunos={alunos}
+          turmas={turmas}
+          notas={notas}
+          turmaDisciplinas={turmaDisciplinas}
+        />
       </div>
     </div>
   )
