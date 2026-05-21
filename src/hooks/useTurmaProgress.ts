@@ -21,14 +21,20 @@ export function useTurmaProgress(
       .filter((td) => td.turma_id === turma.id)
       .map((td) => td.disciplina_id)
 
-    const totalPares = alunosTurma.length * disciplinasDaTurma.length
+      const etapasDaTurma = 3
 
-    const paresComNota = notas.filter(
-      (n) =>
-        n.nota !== null &&
-        alunosTurma.some((a) => a.id === n.aluno_id) &&
-        disciplinasDaTurma.includes(n.disciplina_id ?? '')
-    ).length
+      const totalPares = alunosTurma.length * disciplinasDaTurma.length * etapasDaTurma
+
+      const paresComNota = new Set(
+        notas
+          .filter(
+            (n) =>
+              n.nota !== null &&
+              alunosTurma.some((a) => a.id === n.aluno_id) &&
+              disciplinasDaTurma.includes(n.disciplina_id ?? '')
+          )
+          .map((n) => `${n.aluno_id}:${n.disciplina_id}:${n.etapa}`)
+      ).size
 
     const progress = totalPares
       ? Math.round((paresComNota / totalPares) * 100)

@@ -1,8 +1,18 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
-export type Turma = { id: string; nome: string; ano: number }
-export type Aluno = { id: string; nome: string; matricula: bigint | null; turma_id: string | null }
+export type Turma = {
+  id: string
+  nome: string
+  ano: number
+  serie: 1 | 2 | 3
+}
+export type Aluno = {
+  id: string
+  nome: string
+  matricula: bigint | null
+  turma_id: string | null
+}
 export type Nota = {
   id: string
   aluno_id: string | null
@@ -32,7 +42,12 @@ export function useSchoolData() {
       setIsLoading(true)
       const [turmasRes, alunosRes, notasRes, disciplinasRes, turmaDisciplinasRes] =
         await Promise.all([
-          supabase.from('turmas').select('id,nome,ano').order('ano', { ascending: false }).order('nome'),
+          supabase
+            .from('turmas')
+            .select('id,nome,ano,serie')
+            .order('ano', { ascending: false })
+            .order('serie')
+            .order('nome'),
           supabase.from('alunos').select('id,nome,matricula,turma_id').order('nome'),
           supabase.from('notas').select('id,aluno_id,disciplina_id,etapa,nota,frequencia'),
           supabase.from('disciplinas').select('id,nome,area_id').order('nome'),
@@ -48,10 +63,10 @@ export function useSchoolData() {
       if (err) throw err
 
       setData({
-        turmas: (turmasRes.data ?? []) as Turma[],
-        alunos: (alunosRes.data ?? []) as Aluno[],
-        notas: (notasRes.data ?? []) as Nota[],
-        disciplinas: (disciplinasRes.data ?? []) as Disciplina[],
+        turmas:           (turmasRes.data           ?? []) as Turma[],
+        alunos:           (alunosRes.data           ?? []) as Aluno[],
+        notas:            (notasRes.data            ?? []) as Nota[],
+        disciplinas:      (disciplinasRes.data      ?? []) as Disciplina[],
         turmaDisciplinas: (turmaDisciplinasRes.data ?? []) as TurmaDisciplina[],
       })
     } catch (e: unknown) {
@@ -61,11 +76,9 @@ export function useSchoolData() {
     }
   }, [])
 
-  useEffect(() => {
-    load()
-  }, [load])
+  useEffect(() => { load() }, [load])
 
-  return { data, isLoading, error, reload: load }
+  return { data, isLoading, error, reload: load, refetch: load }
 }
 
 export function formatNumber(value: number) {

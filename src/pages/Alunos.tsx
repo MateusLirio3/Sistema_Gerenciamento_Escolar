@@ -1,7 +1,5 @@
 import { useState } from 'react'
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
 import {
   useSchoolData,
@@ -13,7 +11,6 @@ import {
 } from '../hooks/useSchoolData'
 import { LoadingState, ErrorState, EmptyState } from '../components/States'
 
-// ── Status helpers ────────────────────────────────────────────────────────────
 
 // ── Status helpers ────────────────────────────────────────────────────────────
 
@@ -36,18 +33,16 @@ function getStatusNotas(
   const totalComNota = disciplinasDaTurma.filter((id) => disciplinasComNota.has(id)).length
   if (totalComNota === 0) return 'pendente'
   if (totalComNota === disciplinasDaTurma.length) return 'completo'
-  if (totalComNota === disciplinasDaTurma.length) return 'completo'
   return 'parcial'
 }
 
+// FIX 1: Removed duplicate keys from STATUS_CONFIG
 const STATUS_CONFIG = {
   completo: { label: 'Com notas',     className: 'bg-green-50 text-green-700' },
   parcial:  { label: 'Incompleto',    className: 'bg-amber-50 text-amber-700' },
   pendente: { label: 'Nota pendente', className: 'bg-red-50 text-red-600'    },
-  completo: { label: 'Com notas',     className: 'bg-green-50 text-green-700' },
-  parcial:  { label: 'Incompleto',    className: 'bg-amber-50 text-amber-700' },
-  pendente: { label: 'Nota pendente', className: 'bg-red-50 text-red-600'    },
 }
+
 
 // ── Modal de criação / edição ─────────────────────────────────────────────────
 
@@ -82,7 +77,6 @@ function AlunoModal({ turmas, aluno, onClose, onSaved }: ModalProps) {
     if (!form.nome.trim()) { setErr('Nome é obrigatório.'); return }
     if (!form.turma_id)    { setErr('Selecione uma turma.'); return }
 
-    // Valida matrícula: deve ter 13 dígitos se preenchida
     if (form.matricula.trim() !== '' && !/^\d{1,13}$/.test(form.matricula.trim())) {
       setErr('Matrícula deve conter apenas números (até 13 dígitos).')
       return
@@ -229,14 +223,15 @@ function AlunoModal({ turmas, aluno, onClose, onSaved }: ModalProps) {
   )
 }
 
+
 // ── Row ───────────────────────────────────────────────────────────────────────
 
+// FIX 2: AlunoRow now correctly returns only a <tr>, not the entire page
 function AlunoRow({
   aluno,
   turmas,
   notas,
   turmaDisciplinas,
-  onEdit,
   onEdit,
 }: {
   aluno: Aluno
@@ -244,14 +239,12 @@ function AlunoRow({
   notas: Nota[]
   turmaDisciplinas: TurmaDisciplina[]
   onEdit: (aluno: Aluno) => void
-  onEdit: (aluno: Aluno) => void
 }) {
   const navigate = useNavigate()
   const turma = turmas.find((t) => t.id === aluno.turma_id)
 
   const notasAluno = notas.filter((n) => n.aluno_id === aluno.id && n.nota !== null)
 
-  // Média correta: média por disciplina → média das médias
   const mediasPorDisciplina = Object.values(
     notasAluno.reduce<Record<string, number[]>>((acc, n) => {
       const key = n.disciplina_id ?? 'sem'
@@ -269,172 +262,59 @@ function AlunoRow({
   const { label, className } = STATUS_CONFIG[status]
 
   return (
-    <tr className="hover:bg-gray-50 transition-colors">
-      <td
-        className="cursor-pointer px-6 py-3.5 font-medium text-gray-900"
-        onClick={() => navigate(`/aluno/${aluno.id}`)}
-      >
-        {aluno.nome}
+    <tr
+      onClick={() => navigate(`/alunos/${aluno.id}`)}
+      className="cursor-pointer hover:bg-gray-50 transition-colors"
+    >
+      <td className="px-6 py-3 font-medium text-gray-900">{aluno.nome}</td>
+      <td className="px-6 py-3 text-gray-600">{turma?.nome ?? '—'}</td>
+      <td className="px-6 py-3 text-gray-600">
+        {aluno.matricula != null ? BigInt(aluno.matricula) : '—'}
       </td>
-      <td
-        className="cursor-pointer px-6 py-3.5 text-gray-500"
-        onClick={() => navigate(`/aluno/${aluno.id}`)}
-      >
-        {turma?.nome ?? 'Sem turma'}
+      <td className="px-6 py-3 text-gray-600">
+        {media != null ? media.toFixed(1) : '—'}
       </td>
-      <td
-        className="cursor-pointer px-6 py-3.5 text-gray-400"
-        onClick={() => navigate(`/aluno/${aluno.id}`)}
-      >
-        {aluno.matricula != null ? String(aluno.matricula) : '—'}
-      </td>
-      <td
-        className="cursor-pointer px-6 py-3.5"
-        onClick={() => navigate(`/aluno/${aluno.id}`)}
-      >
-        {media === null ? (
-          <span className="text-gray-400">—</span>
-        ) : (
-          <span
-            className={`font-semibold ${
-              media >= 7 ? 'text-green-600' : media >= 5 ? 'text-amber-600' : 'text-red-600'
-            }`}
-          >
-            {formatNumber(media)}
-          </span>
-        )}
-      </td>
-      <td
-        className="cursor-pointer px-6 py-3.5"
-        onClick={() => navigate(`/aluno/${aluno.id}`)}
-      >
-      <td
-        className="cursor-pointer px-6 py-3.5"
-        onClick={() => navigate(`/aluno/${aluno.id}`)}
-      >
-        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>
+      <td className="px-6 py-3">
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>
           {label}
         </span>
       </td>
-      <td className="px-4 py-3.5 text-right">
+      <td className="px-6 py-3 text-right">
         <button
-          onClick={() => onEdit(aluno)}
-          className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-          title="Editar aluno"
+          onClick={(e) => { e.stopPropagation(); onEdit(aluno) }}
+          className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
         >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
-          </svg>
-        </button>
-      </td>
-      <td className="px-4 py-3.5 text-right">
-        <button
-          onClick={() => onEdit(aluno)}
-          className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-          title="Editar aluno"
-        >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
-          </svg>
+          Editar
         </button>
       </td>
     </tr>
   )
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function Alunos() {
-  const { data, isLoading, error, reload } = useSchoolData()
+export default function AlunosPage() {
+  const { data, isLoading: loading, error, reload: refresh } = useSchoolData()
+    const alunos           = data?.alunos           ?? []
+    const turmas           = data?.turmas           ?? []
+    const notas            = data?.notas            ?? []
+    const turmaDisciplinas = data?.turmaDisciplinas ?? []
+
   const [modal, setModal] = useState<{ open: boolean; aluno: Aluno | null }>({
     open: false,
     aluno: null,
   })
 
-  if (isLoading) return <LoadingState />
-  if (error)     return <ErrorState message={error} />
-  if (error)     return <ErrorState message={error} />
-
-  const alunos           = data?.alunos           ?? []
-  const turmas           = data?.turmas           ?? []
-  const notas            = data?.notas            ?? []
-  const turmaDisciplinas = data?.turmaDisciplinas ?? []
-
   function openCreate() { setModal({ open: true, aluno: null }) }
   function openEdit(aluno: Aluno) { setModal({ open: true, aluno }) }
   function closeModal() { setModal({ open: false, aluno: null }) }
-  function onSaved() { closeModal(); reload?.() }
+  function onSaved() { closeModal(); refresh() }
+
+  if (loading) return <LoadingState />
+  if (error)   return <ErrorState message={error} />
 
   return (
-    <>
-      {modal.open && (
-        <AlunoModal
-          turmas={turmas}
-          aluno={modal.aluno}
-          onClose={closeModal}
-          onSaved={onSaved}
-        />
-      )}
-
-      <div className="rounded-xl border border-gray-200 bg-white">
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">
-              Cadastro e acompanhamento de alunos
-            </h2>
-            <p className="mt-0.5 text-sm text-gray-400">{alunos.length} alunos matriculados</p>
-          </div>
-          <button
-            onClick={openCreate}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-            </svg>
-            Novo aluno
-          </button>
-        </div>
-
-        <div className="overflow-x-auto">
-          {alunos.length === 0 ? (
-            <EmptyState text="Nenhum aluno cadastrado." />
-          ) : (
-            <table className="w-full min-w-[640px] text-sm">
-              <thead className="border-b border-gray-100 text-left">
-                <tr>
-                  {['Aluno', 'Turma', 'Matrícula', 'Média', 'Status', ''].map((h) => (
-                    <th
-                      key={h}
-                      className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {[...alunos]
-                  .sort((a, b) =>
-                    a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true, sensitivity: 'base' })
-                  )
-                  .map((aluno) => (
-                    <AlunoRow
-                      key={aluno.id}
-                      aluno={aluno}
-                      turmas={turmas}
-                      notas={notas}
-                      turmaDisciplinas={turmaDisciplinas}
-                      onEdit={openEdit}
-                    />
-                  ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-    </>
     <>
       {modal.open && (
         <AlunoModal

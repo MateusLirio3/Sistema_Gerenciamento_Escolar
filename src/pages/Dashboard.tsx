@@ -53,16 +53,13 @@ function TurmasPanel({
   alunos,
   notas,
   turmaDisciplinas,
-  turmaDisciplinas,
 }: {
   turmas: Turma[]
   alunos: Aluno[]
   notas: Nota[]
   turmaDisciplinas: TurmaDisciplina[]
-  turmaDisciplinas: TurmaDisciplina[]
 }) {
-  const turmaProgresses = useTurmaProgress(turmas, alunos, notas, turmaDisciplinas)
-
+  
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
       <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">

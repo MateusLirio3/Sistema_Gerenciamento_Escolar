@@ -10,127 +10,97 @@ interface Aluno {
   nota: number
 }
 
-type OrderBy = 'nome' | 'nota' | 'frequencia'
+type OrderBy  = 'nome' | 'nota' | 'frequencia'
 type OrderDir = 'asc' | 'desc'
+
+const SERIE_LABEL: Record<number, string> = {
+  1: '1º ano',
+  2: '2º ano',
+  3: '3º ano',
+}
 
 export default function Turma() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  
-  const [nomeTurma, setNomeTurma] = useState('')
-  const [alunos, setAlunos] = useState<Aluno[]>([])
-  const [alunosRaw, setAlunosRaw] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [orderBy, setOrderBy] = useState<OrderBy>('nome')
-  const [orderDir, setOrderDir] = useState<OrderDir>('asc')
 
+  const [nomeTurma, setNomeTurma]   = useState('')
+  const [anoTurma, setAnoTurma]     = useState<number | null>(null)
+  const [serieTurma, setSerieTurma] = useState<number | null>(null)
+  const [alunos, setAlunos]         = useState<Aluno[]>([])
+  const [alunosRaw, setAlunosRaw]   = useState<any[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState('')
+  const [orderBy, setOrderBy]       = useState<OrderBy>('nome')
+  const [orderDir, setOrderDir]     = useState<OrderDir>('asc')
   const [disciplina, setDisciplina] = useState<string>('todas')
   const [disciplinas, setDisciplinas] = useState<string[]>([])
 
-  useEffect(() => {
-    if (id) carregarDados()
-  }, [id])
+  useEffect(() => { if (id) carregarDados() }, [id])
 
   async function carregarDados() {
     try {
-      setLoading(true)
-      setError('')
+      setLoading(true); setError('')
 
       const { data: turmaData } = await supabase
-        .from('turmas')
-        .select('nome')
-        .eq('id', id)
-        .single()
+        .from('turmas').select('nome,ano,serie').eq('id', id).single()
 
-      setNomeTurma(turmaData?.nome || '')
+      setNomeTurma(turmaData?.nome ?? '')
+      setAnoTurma(turmaData?.ano ?? null)
+      setSerieTurma(turmaData?.serie ?? null)
 
       const { data: alunosData } = await supabase
         .from('alunos')
-        .select(`
-          id,
-          nome,
-          notas (
-            nota,
-            frequencia,
-            etapa,
-            disciplinas (nome)
-          )
-        `)
+        .select(`id, nome, notas (nota, frequencia, etapa, disciplinas (nome))`)
         .eq('turma_id', id)
 
       const todasDisciplinas = new Set<string>()
-
-      alunosData?.forEach(aluno => {
+      alunosData?.forEach((aluno) => {
         aluno.notas?.forEach((n: any) => {
-          if (n.disciplinas?.nome) {
-            todasDisciplinas.add(n.disciplinas.nome)
-          }
+          if (n.disciplinas?.nome) todasDisciplinas.add(n.disciplinas.nome)
         })
       })
 
       setDisciplinas(Array.from(todasDisciplinas).sort((a, b) => a.localeCompare(b, 'pt-BR')))
-      setAlunosRaw(alunosData || [])
-
+      setAlunosRaw(alunosData ?? [])
     } catch (err) {
-      console.error(err)
-      setError('Erro ao carregar dados')
+      console.error(err); setError('Erro ao carregar dados')
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    const processados: Aluno[] = alunosRaw.map(aluno => {
-      let notas = aluno.notas || []
-
+    const processados: Aluno[] = alunosRaw.map((aluno) => {
+      let notas = aluno.notas ?? []
       if (disciplina !== 'todas') {
         notas = notas.filter((n: any) =>
           n.disciplinas?.nome?.toLowerCase().trim() === disciplina.toLowerCase().trim()
         )
       }
-
       const mediaFreq = notas.length
-        ? notas.reduce((a: number, n: any) => a + (n.frequencia || 0), 0) / notas.length
-        : 0
-
+        ? notas.reduce((a: number, n: any) => a + (n.frequencia ?? 0), 0) / notas.length : 0
       const mediaNota = notas.length
-        ? notas.reduce((a: number, n: any) => a + (n.nota || 0), 0) / notas.length
-        : 0
-
-      return {
-        id: aluno.id,
-        nome: aluno.nome,
-        frequencia: Math.round(mediaFreq),
-        nota: parseFloat(mediaNota.toFixed(1))
-      }
+        ? notas.reduce((a: number, n: any) => a + (n.nota ?? 0), 0) / notas.length : 0
+      return { id: aluno.id, nome: aluno.nome, frequencia: Math.round(mediaFreq), nota: parseFloat(mediaNota.toFixed(1)) }
     })
-
     setAlunos(processados)
   }, [disciplina, alunosRaw])
 
   const mediaNota = alunos.length
-    ? (alunos.reduce((a, b) => a + b.nota, 0) / alunos.length).toFixed(1)
-    : '0'
-
+    ? (alunos.reduce((a, b) => a + b.nota, 0) / alunos.length).toFixed(1) : '0'
   const mediaFrequencia = alunos.length
-    ? Math.round(alunos.reduce((a, b) => a + b.frequencia, 0) / alunos.length)
-    : 0
+    ? Math.round(alunos.reduce((a, b) => a + b.frequencia, 0) / alunos.length) : 0
 
   const alunosOrdenados = [...alunos].sort((a, b) => {
     const dir = orderDir === 'asc' ? 1 : -1
-    if (orderBy === 'nome') return a.nome.localeCompare(b.nome, 'pt-BR') * dir
-    if (orderBy === 'nota') return (a.nota - b.nota) * dir
+    if (orderBy === 'nome')      return a.nome.localeCompare(b.nome, 'pt-BR') * dir
+    if (orderBy === 'nota')      return (a.nota - b.nota) * dir
     return (a.frequencia - b.frequencia) * dir
   })
 
   const handleSort = (campo: OrderBy) => {
-    if (orderBy === campo) {
-      setOrderDir(orderDir === 'asc' ? 'desc' : 'asc')
-    } else {
-      setOrderBy(campo)
-      setOrderDir('asc')
-    }
+    if (orderBy === campo) setOrderDir(orderDir === 'asc' ? 'desc' : 'asc')
+    else { setOrderBy(campo); setOrderDir('asc') }
   }
 
   const renderSortIcon = (campo: OrderBy) => {
@@ -140,39 +110,53 @@ export default function Turma() {
 
   return (
     <div className="flex flex-col gap-6">
-      <HeaderComVoltar 
+      <HeaderComVoltar
         titulo={nomeTurma || 'Carregando...'}
         onVoltar={() => navigate(-1)}
       />
 
-      {/* filtro */}
+      {/* Metadados da turma */}
+      {!loading && !error && (
+        <div className="flex flex-wrap items-center gap-2">
+          {serieTurma && (
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+              serieTurma === 1 ? 'bg-blue-50 text-blue-700' :
+              serieTurma === 2 ? 'bg-purple-50 text-purple-700' :
+              'bg-indigo-50 text-indigo-700'
+            }`}>
+              {SERIE_LABEL[serieTurma]}
+            </span>
+          )}
+          {anoTurma && (
+            <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
+              Ano letivo {anoTurma}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Filtro de disciplina */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-400">
-          {disciplina === 'todas' ? 'Todas disciplinas' : disciplina}
+          {disciplina === 'todas' ? 'Todas as disciplinas' : disciplina}
         </p>
         <select
           value={disciplina}
           onChange={(e) => setDisciplina(e.target.value)}
-          className="rounded-lg border border-gray-200 px-3 py-2 text-sm hover:border-[#185FA5]"
+          className="rounded-lg border border-gray-200 px-3 py-2 text-sm hover:border-[#185FA5] focus:outline-none"
         >
-          <option value="todas">Todas disciplinas</option>
-          {disciplinas.map(d => (
-            <option key={d} value={d}>{d}</option>
-          ))}
+          <option value="todas">Todas as disciplinas</option>
+          {disciplinas.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
       </div>
 
       {loading ? (
-        <div className="bg-white border rounded-xl p-6 text-center text-gray-500">
-          Carregando...
-        </div>
+        <div className="bg-white border rounded-xl p-6 text-center text-gray-500">Carregando...</div>
       ) : error ? (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-red-600 text-center">
-          {error}
-        </div>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-red-600 text-center">{error}</div>
       ) : (
         <>
-          {/* métricas */}
+          {/* Métricas */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white border rounded-xl p-4">
               <p className="text-xs text-gray-400">Média de nota</p>
@@ -188,25 +172,19 @@ export default function Turma() {
             </div>
           </div>
 
-          {/* tabela */}
+          {/* Tabela */}
           <div className="bg-white border rounded-xl overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="px-4 py-3 text-left">
-                    <button onClick={() => handleSort('nome')}>
-                      Nome {renderSortIcon('nome')}
-                    </button>
+                    <button onClick={() => handleSort('nome')}>Nome {renderSortIcon('nome')}</button>
                   </th>
                   <th className="px-4 py-3 text-center">
-                    <button onClick={() => handleSort('frequencia')}>
-                      Frequência {renderSortIcon('frequencia')}
-                    </button>
+                    <button onClick={() => handleSort('frequencia')}>Frequência {renderSortIcon('frequencia')}</button>
                   </th>
                   <th className="px-4 py-3 text-center">
-                    <button onClick={() => handleSort('nota')}>
-                      Média {renderSortIcon('nota')}
-                    </button>
+                    <button onClick={() => handleSort('nota')}>Média {renderSortIcon('nota')}</button>
                   </th>
                 </tr>
               </thead>
@@ -219,22 +197,12 @@ export default function Turma() {
                   >
                     <td className="px-4 py-3 font-medium text-gray-900">{a.nome}</td>
                     <td className={`px-4 py-3 text-center font-medium ${
-                      a.frequencia >= 75
-                        ? 'text-green-600'
-                        : a.frequencia >= 60
-                        ? 'text-amber-600'
-                        : 'text-red-600'
+                      a.frequencia >= 75 ? 'text-green-600' : a.frequencia >= 60 ? 'text-amber-600' : 'text-red-600'
                     }`}>
                       {a.frequencia}%
                     </td>
                     <td className={`px-4 py-3 text-center font-medium ${
-                      a.nota >= 7
-                        ? 'text-green-600'
-                        : a.nota >= 5
-                        ? 'text-amber-600'
-                        : a.nota > 0
-                        ? 'text-red-600'
-                        : 'text-gray-400'
+                      a.nota >= 7 ? 'text-green-600' : a.nota >= 5 ? 'text-amber-600' : a.nota > 0 ? 'text-red-600' : 'text-gray-400'
                     }`}>
                       {a.nota > 0 ? a.nota.toFixed(1) : '-'}
                     </td>

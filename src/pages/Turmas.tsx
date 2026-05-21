@@ -1,29 +1,26 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useSchoolData, type Turma, type Aluno, type Nota, type TurmaDisciplina  } from '../hooks/useSchoolData'
+import { useSchoolData, type Turma, type Aluno, type Nota, type TurmaDisciplina } from '../hooks/useSchoolData'
 import { useTurmaProgress } from '../hooks/useTurmaProgress'
 import { LoadingState, ErrorState, EmptyState } from '../components/States'
 import { Pencil, Trash2, Plus, X, Check, AlertCircle } from 'lucide-react'
 
+const SERIES: { value: 1 | 2 | 3; label: string }[] = [
+  { value: 1, label: '1º ano' },
+  { value: 2, label: '2º ano' },
+  { value: 3, label: '3º ano' },
+]
+
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
-interface ModalProps {
-  title: string
-  onClose: () => void
-  children: React.ReactNode
-}
-
-function Modal({ title, onClose, children }: ModalProps) {
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-          <button
-            onClick={onClose}
-            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-          >
+          <button onClick={onClose} className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -33,37 +30,41 @@ function Modal({ title, onClose, children }: ModalProps) {
   )
 }
 
-// ─── Form de turma (criar / editar) ──────────────────────────────────────────
+// ─── Form ─────────────────────────────────────────────────────────────────────
 
 interface TurmaFormProps {
-  initial?: { nome: string; ano: number }
+  initial?: { nome: string; ano: number; serie: 1 | 2 | 3 }
   loading: boolean
   error: string
-  onSubmit: (nome: string, ano: number) => void
+  onSubmit: (nome: string, ano: number, serie: 1 | 2 | 3) => void
   onCancel: () => void
   submitLabel: string
 }
 
 function TurmaForm({ initial, loading, error, onSubmit, onCancel, submitLabel }: TurmaFormProps) {
-  const [nome, setNome] = useState(initial?.nome ?? '')
-  const [ano, setAno] = useState<string>(initial?.ano?.toString() ?? new Date().getFullYear().toString())
+  const [nome, setNome]   = useState(initial?.nome ?? '')
+  const [ano, setAno]     = useState<string>(initial?.ano?.toString() ?? new Date().getFullYear().toString())
+  const [serie, setSerie] = useState<1 | 2 | 3>(initial?.serie ?? 1)
 
   function handleSubmit() {
     const anoNum = parseInt(ano)
     if (!nome.trim() || isNaN(anoNum)) return
-    onSubmit(nome.trim(), anoNum)
+    onSubmit(nome.trim(), anoNum, serie)
   }
 
   return (
     <div className="flex flex-col gap-4">
       {error && (
         <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          {error}
+          <AlertCircle className="h-4 w-4 shrink-0" />{error}
         </div>
       )}
+
+      {/* Nome */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-gray-700">Nome da turma</label>
+        <label className="text-sm font-medium text-gray-700">
+          Nome da turma <span className="text-red-500">*</span>
+        </label>
         <input
           type="text"
           value={nome}
@@ -73,16 +74,38 @@ function TurmaForm({ initial, loading, error, onSubmit, onCancel, submitLabel }:
           autoFocus
         />
       </div>
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-gray-700">Ano</label>
-        <input
-          type="number"
-          value={ano}
-          onChange={(e) => setAno(e.target.value)}
-          placeholder="Ex: 2025"
-          className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#185FA5] focus:outline-none transition-colors"
-        />
+
+      {/* Série + Ano lado a lado */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-gray-700">
+            Série <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={serie}
+            onChange={(e) => setSerie(Number(e.target.value) as 1 | 2 | 3)}
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#185FA5] focus:outline-none transition-colors bg-white"
+          >
+            {SERIES.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-gray-700">
+            Ano letivo <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="number"
+            value={ano}
+            onChange={(e) => setAno(e.target.value)}
+            placeholder="Ex: 2025"
+            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#185FA5] focus:outline-none transition-colors"
+          />
+        </div>
       </div>
+
       <div className="flex justify-end gap-2 pt-1">
         <button
           onClick={onCancel}
@@ -96,11 +119,9 @@ function TurmaForm({ initial, loading, error, onSubmit, onCancel, submitLabel }:
           disabled={loading || !nome.trim() || !ano}
           className="flex items-center gap-1.5 rounded-lg bg-[#185FA5] px-4 py-2 text-sm font-medium text-white hover:bg-[#0C447C] transition-colors disabled:opacity-50"
         >
-          {loading ? (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-          ) : (
-            <Check className="h-4 w-4" />
-          )}
+          {loading
+            ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            : <Check className="h-4 w-4" />}
           {submitLabel}
         </button>
       </div>
@@ -108,56 +129,67 @@ function TurmaForm({ initial, loading, error, onSubmit, onCancel, submitLabel }:
   )
 }
 
+// ─── Badge de série ───────────────────────────────────────────────────────────
+
+function SerieBadge({ serie }: { serie: 1 | 2 | 3 }) {
+  const labels = { 1: '1º ano', 2: '2º ano', 3: '3º ano' }
+  const colors = {
+    1: 'bg-blue-50 text-blue-700',
+    2: 'bg-purple-50 text-purple-700',
+    3: 'bg-indigo-50 text-indigo-700',
+  }
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${colors[serie]}`}>
+      {labels[serie]}
+    </span>
+  )
+}
+
 // ─── Linha da tabela ──────────────────────────────────────────────────────────
 
-interface TurmaRowProps {
+function TurmaRow({
+  turma, alunos, notas, turmaDisciplinas, onEdit, onDelete,
+}: {
   turma: Turma
   alunos: Aluno[]
   notas: Nota[]
   turmaDisciplinas: TurmaDisciplina[]
   onEdit: (turma: Turma) => void
   onDelete: (turma: Turma) => void
-}
-
-function TurmaRow({ turma, alunos, notas, turmaDisciplinas, onEdit, onDelete }: TurmaRowProps) {
+}) {
   const navigate = useNavigate()
   const [{ alunosTurma, progress, pendencias }] = useTurmaProgress([turma], alunos, notas, turmaDisciplinas)
   const temAlunos = alunosTurma.length > 0
 
   return (
-    <div className="grid gap-3 px-6 py-4 hover:bg-gray-50 transition-colors md:grid-cols-[1fr_auto_auto_auto] md:items-center">
-      {/* info — clicável */}
-      <div
-        className="cursor-pointer"
-        onClick={() => navigate(`/turmas/${turma.id}`)}
-      >
-        <p className="font-semibold text-gray-900">{turma.nome}</p>
+    <div className="grid gap-3 px-6 py-4 hover:bg-gray-50 transition-colors md:grid-cols-[1fr_auto_auto_auto_auto] md:items-center">
+      {/* Info */}
+      <div className="cursor-pointer" onClick={() => navigate(`/turmas/${turma.id}`)}>
+        <div className="flex items-center gap-2">
+          <p className="font-semibold text-gray-900">{turma.nome}</p>
+          <SerieBadge serie={turma.serie} />
+        </div>
         <p className="text-sm text-gray-400">
           Ano {turma.ano} · {alunosTurma.length} aluno{alunosTurma.length !== 1 ? 's' : ''}
         </p>
       </div>
 
-      {/* badge pendências */}
-      <span
-        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-          progress < 80 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'
-        }`}
-      >
+      {/* Pendências */}
+      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+        progress < 80 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'
+      }`}>
         {pendencias} pendência{pendencias !== 1 ? 's' : ''}
       </span>
 
-      {/* barra de progresso */}
+      {/* Barra */}
       <div className="min-w-[8rem]">
         <div className="h-1.5 rounded-full bg-gray-100">
-          <div
-            className="h-1.5 rounded-full bg-[#185FA5] transition-all"
-            style={{ width: `${progress}%` }}
-          />
+          <div className="h-1.5 rounded-full bg-[#185FA5] transition-all" style={{ width: `${progress}%` }} />
         </div>
         <p className="mt-1 text-right text-xs text-gray-400">{progress}%</p>
       </div>
 
-      {/* ações */}
+      {/* Ações */}
       <div className="flex items-center gap-1">
         <button
           onClick={() => onEdit(turma)}
@@ -179,7 +211,7 @@ function TurmaRow({ turma, alunos, notas, turmaDisciplinas, onEdit, onDelete }: 
   )
 }
 
-// ─── Página principal ─────────────────────────────────────────────────────────
+// ─── Página ───────────────────────────────────────────────────────────────────
 
 type ModalState =
   | { type: 'none' }
@@ -190,27 +222,29 @@ type ModalState =
 export default function Turmas() {
   const navigate = useNavigate()
   const { data, isLoading, error, reload } = useSchoolData()
-  const [modal, setModal] = useState<ModalState>({ type: 'none' })
-  const [saving, setSaving] = useState(false)
+  const [modal, setModal]       = useState<ModalState>({ type: 'none' })
+  const [saving, setSaving]     = useState(false)
   const [formError, setFormError] = useState('')
+  const [filtroSerie, setFiltroSerie] = useState<'todas' | '1' | '2' | '3'>('todas')
 
   if (isLoading) return <LoadingState />
-  if (error) return <ErrorState message={error} />
+  if (error)     return <ErrorState message={error} />
 
-  const turmas = data?.turmas ?? []
-  const alunos = data?.alunos ?? []
-  const notas = data?.notas ?? []
+  const turmas           = data?.turmas           ?? []
+  const alunos           = data?.alunos           ?? []
+  const notas            = data?.notas            ?? []
+  const turmaDisciplinas = data?.turmaDisciplinas ?? []
 
-  // ── Criar ──────────────────────────────────────────────────────────────────
-  async function handleCriar(nome: string, ano: number) {
-    setSaving(true)
-    setFormError('')
+  const turmasFiltradas = filtroSerie === 'todas'
+    ? turmas
+    : turmas.filter((t) => t.serie === Number(filtroSerie))
+
+  function abrirModal(m: ModalState) { setFormError(''); setModal(m) }
+
+  async function handleCriar(nome: string, ano: number, serie: 1 | 2 | 3) {
+    setSaving(true); setFormError('')
     const { data: nova, error: err } = await supabase
-      .from('turmas')
-      .insert({ nome, ano })
-      .select('id')
-      .single()
-
+      .from('turmas').insert({ nome, ano, serie }).select('id').single()
     setSaving(false)
     if (err) { setFormError(err.message); return }
     setModal({ type: 'none' })
@@ -218,44 +252,23 @@ export default function Turmas() {
     if (nova?.id) navigate(`/turmas/${nova.id}`)
   }
 
-  // ── Editar ─────────────────────────────────────────────────────────────────
-  async function handleEditar(nome: string, ano: number) {
+  async function handleEditar(nome: string, ano: number, serie: 1 | 2 | 3) {
     if (modal.type !== 'editar') return
-    setSaving(true)
-    setFormError('')
+    setSaving(true); setFormError('')
     const { error: err } = await supabase
-      .from('turmas')
-      .update({ nome, ano })
-      .eq('id', modal.turma.id)
-
+      .from('turmas').update({ nome, ano, serie }).eq('id', modal.turma.id)
     setSaving(false)
     if (err) { setFormError(err.message); return }
-    setModal({ type: 'none' })
-    reload()
+    setModal({ type: 'none' }); reload()
   }
 
-  // ── Excluir ────────────────────────────────────────────────────────────────
-
-  const turmaDisciplinas = data?.turmaDisciplinas ?? []
-  
   async function handleExcluir() {
     if (modal.type !== 'excluir') return
-    setSaving(true)
-    setFormError('')
-    const { error: err } = await supabase
-      .from('turmas')
-      .delete()
-      .eq('id', modal.turma.id)
-
+    setSaving(true); setFormError('')
+    const { error: err } = await supabase.from('turmas').delete().eq('id', modal.turma.id)
     setSaving(false)
     if (err) { setFormError(err.message); return }
-    setModal({ type: 'none' })
-    reload()
-  }
-
-  function abrirModal(m: ModalState) {
-    setFormError('')
-    setModal(m)
+    setModal({ type: 'none' }); reload()
   }
 
   return (
@@ -264,22 +277,38 @@ export default function Turmas() {
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Gestão de turmas</h2>
-            <p className="mt-0.5 text-sm text-gray-400">{turmas.length} turma{turmas.length !== 1 ? 's' : ''} cadastrada{turmas.length !== 1 ? 's' : ''}</p>
+            <p className="mt-0.5 text-sm text-gray-400">
+              {turmasFiltradas.length} turma{turmasFiltradas.length !== 1 ? 's' : ''}
+              {filtroSerie !== 'todas' && ` no ${filtroSerie}º ano`}
+            </p>
           </div>
-          <button
-            onClick={() => abrirModal({ type: 'criar' })}
-            className="flex items-center gap-1.5 rounded-lg bg-[#185FA5] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#0C447C] transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Nova turma
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Filtro por série */}
+            <select
+              value={filtroSerie}
+              onChange={(e) => setFiltroSerie(e.target.value as typeof filtroSerie)}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-[#185FA5] focus:outline-none bg-white"
+            >
+              <option value="todas">Todas as séries</option>
+              {SERIES.map((s) => (
+                <option key={s.value} value={String(s.value)}>{s.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => abrirModal({ type: 'criar' })}
+              className="flex items-center gap-1.5 rounded-lg bg-[#185FA5] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#0C447C] transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Nova turma
+            </button>
+          </div>
         </div>
 
         <div className="divide-y divide-gray-100">
-          {turmas.length === 0 ? (
+          {turmasFiltradas.length === 0 ? (
             <EmptyState text="Nenhuma turma cadastrada." />
           ) : (
-            turmas.map((turma) => (
+            turmasFiltradas.map((turma) => (
               <TurmaRow
                 key={turma.id}
                 turma={turma}
@@ -297,13 +326,7 @@ export default function Turmas() {
       {/* Modal Criar */}
       {modal.type === 'criar' && (
         <Modal title="Nova turma" onClose={() => setModal({ type: 'none' })}>
-          <TurmaForm
-            loading={saving}
-            error={formError}
-            onSubmit={handleCriar}
-            onCancel={() => setModal({ type: 'none' })}
-            submitLabel="Criar turma"
-          />
+          <TurmaForm loading={saving} error={formError} onSubmit={handleCriar} onCancel={() => setModal({ type: 'none' })} submitLabel="Criar turma" />
         </Modal>
       )}
 
@@ -311,9 +334,8 @@ export default function Turmas() {
       {modal.type === 'editar' && (
         <Modal title="Editar turma" onClose={() => setModal({ type: 'none' })}>
           <TurmaForm
-            initial={{ nome: modal.turma.nome, ano: modal.turma.ano }}
-            loading={saving}
-            error={formError}
+            initial={{ nome: modal.turma.nome, ano: modal.turma.ano, serie: modal.turma.serie }}
+            loading={saving} error={formError}
             onSubmit={handleEditar}
             onCancel={() => setModal({ type: 'none' })}
             submitLabel="Salvar alterações"
@@ -327,8 +349,7 @@ export default function Turmas() {
           <div className="flex flex-col gap-4">
             {formError && (
               <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                {formError}
+                <AlertCircle className="h-4 w-4 shrink-0" />{formError}
               </div>
             )}
             <p className="text-sm text-gray-600">
@@ -337,21 +358,13 @@ export default function Turmas() {
               Esta ação não pode ser desfeita.
             </p>
             <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setModal({ type: 'none' })}
-                disabled={saving}
-                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
-              >
+              <button onClick={() => setModal({ type: 'none' })} disabled={saving}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
                 Cancelar
               </button>
-              <button
-                onClick={handleExcluir}
-                disabled={saving}
-                className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors disabled:opacity-50"
-              >
-                {saving && (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                )}
+              <button onClick={handleExcluir} disabled={saving}
+                className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors disabled:opacity-50">
+                {saving && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />}
                 Excluir
               </button>
             </div>
