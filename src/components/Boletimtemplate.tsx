@@ -30,7 +30,6 @@ function isAbaixo(n: number | null): boolean {
   return n !== null && n < 5.0;
 }
 
-// ── Célula de nota com destaque vermelho se abaixo da média ──────────────────
 function CelNota({ valor }: { valor: number | null }) {
   return (
     <td
@@ -43,7 +42,6 @@ function CelNota({ valor }: { valor: number | null }) {
   );
 }
 
-// ── Tabela de uma área ───────────────────────────────────────────────────────
 function TabelaArea({
   titulo,
   disciplinas,
@@ -170,17 +168,11 @@ function TabelaArea({
               <td
                 className="border border-black bg-gray-50 align-middle"
                 rowSpan={disciplinas.length}
-                style={{
-                  width: 16,
-                  minWidth: 16,
-                  maxWidth: 16,
-                  padding: 0,
-                }}
+                style={{ width: 16, minWidth: 16, maxWidth: 16, padding: 0 }}
               >
                 <AreaLabel titulo={titulo} linhas={disciplinas.length} />
               </td>
             )}
-
             <td className="border border-black px-0.5 text-[7.5px]">{disc.disciplina_nome}</td>
             <td className="border border-black px-0.5 text-center text-[7.5px]">
               {fmtFreq(disc.frequencia)}
@@ -213,18 +205,23 @@ function TabelaArea({
   );
 }
 
-// ── Componente principal ─────────────────────────────────────────────────────
 const BoletimTemplate = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
-  const { aluno, turma, dataEmissao, disciplinas, resumo, etapa } = data;
+  const { aluno, turma, dataEmissao, disciplinas, resumo, etapa, datasEtapas } = data;
 
-  // Agrupa disciplinas por área
   const porArea = new Map<string, NotaDisciplina[]>();
   for (const disc of disciplinas) {
     if (!porArea.has(disc.area_nome)) porArea.set(disc.area_nome, []);
     porArea.get(disc.area_nome)!.push(disc);
   }
 
-  const areasOrdenadas = ORDEM_AREAS.filter((a) => porArea.has(a));
+  const areasBanco = [...porArea.keys()];
+
+  const areasOrdenadas = [
+    ...ORDEM_AREAS.filter((a) => areasBanco.includes(a)),
+
+    ...areasBanco.filter((a) => !ORDEM_AREAS.includes(a)),
+  ];
+  
   const metade = Math.ceil(areasOrdenadas.length / 2);
   const esquerda = areasOrdenadas.slice(0, metade);
   const direita = areasOrdenadas.slice(metade);
@@ -235,14 +232,9 @@ const BoletimTemplate = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
     <div
       ref={ref}
       className="bg-white text-black overflow-hidden"
-      style={{
-        width: "1123px",
-        height: "794px",
-        padding: "24px",
-        boxSizing: "border-box",
-      }}
+      style={{ width: "1123px", height: "794px", padding: "24px", boxSizing: "border-box" }}
     >
-      {/* ── Cabeçalho ── */}
+      {/* Cabeçalho */}
       <header className="flex items-center justify-between mb-1">
         <img src="/assets/logo_isepam.avif" alt="ISEPAM" className="w-14 h-auto" />
         <div className="text-center leading-tight" style={{ fontSize: 8 }}>
@@ -258,7 +250,7 @@ const BoletimTemplate = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
         BOLETIM DE NOTAS E FREQUÊNCIAS
       </h1>
 
-      {/* ── Dados do aluno ── */}
+      {/* Dados do aluno */}
       <div className="flex gap-3 border border-black px-2 py-1 mb-1 items-end">
         <div className="flex flex-col flex-[3]">
           <span style={{ fontSize: 7 }} className="text-gray-600">Aluno(a)</span>
@@ -278,26 +270,24 @@ const BoletimTemplate = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
         </div>
       </div>
 
-      {/* ── Barra de resumo — duas colunas ── */}
+      {/* Barra de resumo */}
       <div className="grid grid-cols-2 gap-1 mb-1.5">
-        {/* Coluna da esquerda */}
+        {/* Esquerda */}
         <div className="border border-black px-2 py-1" style={{ fontSize: 8 }}>
           <div className="flex gap-4 items-start">
-            {/* Datas das etapas */}
+            {/* Datas das etapas — now real from DB */}
             <div className="flex flex-col gap-0.5">
               <span className="text-gray-600">Fim da Etapa</span>
-              <span>1ª - 23/05/{turma.ano}</span>
-              <span>2ª - 12/09/{turma.ano}</span>
-              <span>3ª - 05/12/{turma.ano}</span>
+              <span>1ª - {datasEtapas.etapa1Fim}</span>
+              <span>2ª - {datasEtapas.etapa2Fim}</span>
+              <span>3ª - {datasEtapas.etapa3Fim}</span>
             </div>
 
-            {/* Frequência global */}
             <div className="flex flex-col items-center">
               <span className="text-gray-600">% Freq Global</span>
               <span className="text-xl font-bold">{resumo.freqGlobal}%</span>
             </div>
 
-            {/* Qtd abaixo da média — agora um único valor (médias finais) */}
             <div className="flex flex-col items-center">
               <span className="text-gray-600 mb-0.5">Abaixo da média</span>
               <span className="text-xl font-bold">{resumo.qtdAbaixoMedia}</span>
@@ -306,10 +296,9 @@ const BoletimTemplate = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
           </div>
         </div>
 
-        {/* Coluna da direita */}
+        {/* Direita */}
         <div className="border border-black px-2 py-1" style={{ fontSize: 8 }}>
           <div className="flex gap-4 items-start justify-between">
-            {/* C.R - agora único (crCurso) */}
             <div className="flex flex-col">
               <span className="text-gray-600 mb-0.5">C.R. (Coeficiente de Rendimento)</span>
               <div className="flex gap-2">
@@ -320,7 +309,6 @@ const BoletimTemplate = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
               </div>
             </div>
 
-            {/* Média das etapas */}
             <div className="flex flex-col">
               <span className="text-gray-600 mb-0.5">Média das etapas</span>
               <div className="flex gap-2">
@@ -340,7 +328,7 @@ const BoletimTemplate = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
         </div>
       </div>
 
-      {/* ── Tabelas de disciplinas — duas colunas ── */}
+      {/* Tabelas de disciplinas */}
       <div className="grid grid-cols-2 gap-1.5 mb-1.5">
         <div className="flex flex-col gap-1">
           {esquerda.map((area) => (
@@ -354,18 +342,14 @@ const BoletimTemplate = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
         </div>
       </div>
 
-      {/* ── Aviso ── */}
       <p className="italic mb-1" style={{ fontSize: 7.5 }}>
         Prezado(a) aluno(a), as notas e frequências registradas nesse boletim, após a
         revisão/conferência do professor, estão sujeitas a atualização.
       </p>
 
-      {/* ── Situação Final - Só aparece na 3ª etapa ── */}
       {isTerceiraEtapa && (
         <div className="inline-flex flex-col border border-black px-4 py-2 min-w-[160px]">
-          <span style={{ fontSize: 7.5 }} className="text-gray-600">
-            Situação final
-          </span>
+          <span style={{ fontSize: 7.5 }} className="text-gray-600">Situação final</span>
           <span
             className={`text-base font-bold ${
               resumo.situacaoFinal === "APROVADO" ? "text-black" : "text-red-700"
@@ -376,7 +360,6 @@ const BoletimTemplate = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
         </div>
       )}
 
-      {/* Rodapé */}
       <footer className="mt-4 text-center" style={{ fontSize: 7 }}>
         <p>Boletim gerado pelo Sistema de Gestão Acadêmica</p>
       </footer>

@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef, useCallback, forwardRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useSchoolData } from '../hooks/useSchoolData'
+import { useEtapas, getEtapaVigente, isEtapaAberta, formatDataEtapa } from '../hooks/useEtapas'
 import { LoadingState, ErrorState } from '../components/States'
-import { Check, ChevronDown, Save } from 'lucide-react'
+import { Check, ChevronDown, Save, AlertTriangle, CalendarDays } from 'lucide-react'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -23,7 +24,6 @@ function notaColor(v: number) {
 }
 
 // ─── Componente de linha ──────────────────────────────────────────────────────
-// forwardRef expõe o input de Nota para que a linha anterior possa focar nele via Tab
 
 const AlunoNotaRow = forwardRef<HTMLInputElement, {
   row: AlunoNota
@@ -34,28 +34,27 @@ const AlunoNotaRow = forwardRef<HTMLInputElement, {
   saving: boolean
   isLast: boolean
   onNextRow: (i: number) => void
+  disabled: boolean
 }>(function AlunoNotaRow(
-  { row, index, onChangeNota, onChangeFreq, onSave, saving, isLast, onNextRow },
-  notaRef   // <- ref do input Nota, exposto para a linha anterior usar via Tab
+  { row, index, onChangeNota, onChangeFreq, onSave, saving, isLast, onNextRow, disabled },
+  notaRef
 ) {
   const freqRef = useRef<HTMLInputElement>(null)
-
   const notaNum = parseFloat(row.nota)
   const freqNum = parseInt(row.frequencia)
   const hasValues = !isNaN(notaNum) && !isNaN(freqNum)
 
   return (
-    <tr className={`transition-colors ${row.saved ? 'bg-green-50' : 'hover:bg-gray-50'}`}>
-      {/* Nome */}
+    <tr className={`transition-colors ${row.saved ? 'bg-green-50' : 'hover:bg-gray-50'} ${disabled ? 'opacity-50' : ''}`}>
       <td className="px-6 py-2.5 font-medium text-gray-900 text-sm">{row.aluno_nome}</td>
 
-      {/* Nota */}
       <td className="px-3 py-2.5">
         <input
           ref={notaRef}
           type="number" min={0} max={10} step={0.1}
           placeholder="0,0 – 10,0"
           value={row.nota}
+          disabled={disabled}
           onChange={(e) => onChangeNota(index, e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); freqRef.current?.focus() }
@@ -64,11 +63,11 @@ const AlunoNotaRow = forwardRef<HTMLInputElement, {
           }}
           className={`w-24 rounded-lg border px-2.5 py-1.5 text-center text-sm outline-none transition-all
             ${row.error ? 'border-red-300 bg-red-50' : 'border-gray-200'}
-            focus:border-[#185FA5] focus:ring-2 focus:ring-blue-100`}
+            focus:border-[#185FA5] focus:ring-2 focus:ring-blue-100
+            disabled:bg-gray-50 disabled:cursor-not-allowed`}
         />
       </td>
 
-      {/* Frequência */}
       <td className="px-3 py-2.5">
         <div className="flex items-center gap-1">
           <input
@@ -76,16 +75,13 @@ const AlunoNotaRow = forwardRef<HTMLInputElement, {
             type="number" min={0} max={100}
             placeholder="0 – 100"
             value={row.frequencia}
+            disabled={disabled}
             onChange={(e) => onChangeFreq(index, e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Tab' && !e.shiftKey) {
                 e.preventDefault()
-                // Salva silenciosamente e pula para o input de Nota da próxima linha
                 onSave(index)
                 if (!isLast) onNextRow(index)
-              }
-              if (e.key === 'Tab' && e.shiftKey) {
-                // Shift+Tab volta para o input de Nota da mesma linha (comportamento natural)
               }
               if (e.key === 'Enter') {
                 e.preventDefault()
@@ -96,13 +92,13 @@ const AlunoNotaRow = forwardRef<HTMLInputElement, {
             }}
             className={`w-24 rounded-lg border px-2.5 py-1.5 text-center text-sm outline-none transition-all
               ${row.error ? 'border-red-300 bg-red-50' : 'border-gray-200'}
-              focus:border-[#185FA5] focus:ring-2 focus:ring-blue-100`}
+              focus:border-[#185FA5] focus:ring-2 focus:ring-blue-100
+              disabled:bg-gray-50 disabled:cursor-not-allowed`}
           />
           <span className="text-xs text-gray-400">%</span>
         </div>
       </td>
 
-      {/* Status */}
       <td className="px-3 py-2.5 text-center">
         {row.saved ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
@@ -110,7 +106,7 @@ const AlunoNotaRow = forwardRef<HTMLInputElement, {
           </span>
         ) : row.error ? (
           <span className="text-xs text-red-500">{row.error}</span>
-        ) : hasValues ? (
+        ) : hasValues && !disabled ? (
           <button
             onClick={() => onSave(index)}
             disabled={saving}
@@ -123,7 +119,6 @@ const AlunoNotaRow = forwardRef<HTMLInputElement, {
         )}
       </td>
 
-      {/* Preview nota */}
       <td className="px-3 py-2.5 text-center">
         {hasValues ? (
           <span className={`text-sm font-bold ${notaColor(notaNum)}`}>
@@ -140,13 +135,14 @@ const AlunoNotaRow = forwardRef<HTMLInputElement, {
 // ─── Select estilizado ────────────────────────────────────────────────────────
 
 function Select({
-  label, value, onChange, options, placeholder,
+  label, value, onChange, options, placeholder, disabled,
 }: {
   label: string
   value: string
   onChange: (v: string) => void
   options: { value: string; label: string }[]
   placeholder: string
+  disabled?: boolean
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -155,7 +151,8 @@ function Select({
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-2.5 pr-10 text-sm text-gray-900 outline-none focus:border-[#185FA5] focus:ring-2 focus:ring-blue-100 transition-all"
+          disabled={disabled}
+          className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-2.5 pr-10 text-sm text-gray-900 outline-none focus:border-[#185FA5] focus:ring-2 focus:ring-blue-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <option value="">{placeholder}</option>
           {options.map((o) => (
@@ -168,26 +165,74 @@ function Select({
   )
 }
 
+// ─── Banner de status da etapa ────────────────────────────────────────────────
+
+function EtapaStatusBanner({
+  etapaAberta,
+  etapaVigente,
+  etapaSelecionada,
+  dataInicio,
+  dataFim,
+}: {
+  etapaAberta: boolean
+  etapaVigente: number | null
+  etapaSelecionada: string
+  dataInicio: string | null
+  dataFim: string | null
+}) {
+  if (!etapaSelecionada) return null
+
+  // No dates configured — neutral info
+  if (!dataInicio && !dataFim) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-500">
+        <CalendarDays className="h-4 w-4 shrink-0" />
+        <span>Datas não configuradas para esta etapa. Configure em <strong>Etapas</strong> para habilitar controle de período.</span>
+      </div>
+    )
+  }
+
+  if (etapaAberta) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-700">
+        <CalendarDays className="h-4 w-4 shrink-0" />
+        <span>
+          Etapa aberta · {formatDataEtapa(dataInicio)} até {formatDataEtapa(dataFim)}
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
+      <AlertTriangle className="h-4 w-4 shrink-0" />
+      <span>
+        Esta etapa está <strong>fora do período</strong> ({formatDataEtapa(dataInicio)} – {formatDataEtapa(dataFim)}).
+        Lançamentos ainda são possíveis, mas esteja ciente da data.
+        {etapaVigente && ` Etapa vigente: ${etapaVigente}ª.`}
+      </span>
+    </div>
+  )
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function LancamentoMassa() {
-  const { data, isLoading, error } = useSchoolData()
+  const { turmas, disciplinas, turmaDisciplinas, loading, error } = useSchoolData()
 
   const [turmaId, setTurmaId]           = useState('')
   const [disciplinaId, setDisciplinaId] = useState('')
   const [etapa, setEtapa]               = useState('')
 
-  const [alunosNota, setAlunosNota]     = useState<AlunoNota[]>([])
+  const [alunosNota, setAlunosNota]       = useState<AlunoNota[]>([])
   const [loadingAlunos, setLoadingAlunos] = useState(false)
-  const [saving, setSaving]             = useState(false)
-  const [savedAll, setSavedAll]         = useState(false)
+  const [saving, setSaving]               = useState(false)
+  const [savedAll, setSavedAll]           = useState(false)
 
-  // Array de refs para o input de Nota de cada linha
   const notaRefs = useRef<(HTMLInputElement | null)[]>([])
 
-  const turmas           = data?.turmas           ?? []
-  const disciplinas      = data?.disciplinas      ?? []
-  const turmaDisciplinas = data?.turmaDisciplinas ?? []
+  // Fetch etapas for the selected turma
+  const { etapas } = useEtapas(turmaId || null)
 
   const disciplinasDaTurma = turmaDisciplinas
     .filter((td) => td.turma_id === turmaId)
@@ -196,6 +241,12 @@ export default function LancamentoMassa() {
   const disciplinasFiltradas = disciplinas
     .filter((d) => disciplinasDaTurma.includes(d.id))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+
+  // Etapa period info
+  const etapaNum = etapa ? (parseInt(etapa) as 1 | 2 | 3) : null
+  const etapaObj = etapaNum ? etapas.find((e) => e.numero === etapaNum) ?? null : null
+  const etapaAberta = etapaNum ? isEtapaAberta(etapas, etapaNum) : true
+  const vigente = getEtapaVigente(etapas)
 
   useEffect(() => { setDisciplinaId('') }, [turmaId])
 
@@ -235,13 +286,10 @@ export default function LancamentoMassa() {
       })
     )
 
-    // Foca automaticamente no primeiro input de nota ao carregar
     setTimeout(() => notaRefs.current[0]?.focus(), 50)
-
     setLoadingAlunos(false)
   }
 
-  // Foca o input de Nota da linha seguinte
   function focarProximaLinha(index: number) {
     notaRefs.current[index + 1]?.focus()
   }
@@ -294,7 +342,6 @@ export default function LancamentoMassa() {
         })
 
     setSaving(false)
-
     setAlunosNota((prev) => prev.map((r, idx) =>
       idx === i ? { ...r, error: err?.message ?? '', saved: !err } : r
     ))
@@ -312,8 +359,8 @@ export default function LancamentoMassa() {
   const prontoParaSalvar = alunosNota.some((r) => r.nota !== '' && r.frequencia !== '')
   const totalSalvos      = alunosNota.filter((r) => r.saved).length
 
-  if (isLoading) return <LoadingState />
-  if (error)     return <ErrorState message={error} />
+  if (loading) return <LoadingState />
+  if (error)   return <ErrorState message={error} />
 
   return (
     <div className="flex flex-col gap-4">
@@ -332,6 +379,7 @@ export default function LancamentoMassa() {
             label="Disciplina" value={disciplinaId} onChange={setDisciplinaId}
             placeholder={turmaId ? 'Selecione a disciplina...' : 'Selecione a turma primeiro'}
             options={disciplinasFiltradas.map((d) => ({ value: d.id, label: d.nome }))}
+            disabled={!turmaId}
           />
           <Select
             label="Etapa" value={etapa} onChange={setEtapa}
@@ -341,8 +389,22 @@ export default function LancamentoMassa() {
               { value: '2', label: '2ª Etapa' },
               { value: '3', label: '3ª Etapa' },
             ]}
+            disabled={!turmaId}
           />
         </div>
+
+        {/* Etapa period status banner */}
+        {turmaId && etapa && (
+          <div className="mt-4">
+            <EtapaStatusBanner
+              etapaAberta={etapaAberta}
+              etapaVigente={vigente?.numero ?? null}
+              etapaSelecionada={etapa}
+              dataInicio={etapaObj?.data_inicio ?? null}
+              dataFim={etapaObj?.data_fim ?? null}
+            />
+          </div>
+        )}
       </div>
 
       {/* Tabela */}
@@ -405,6 +467,7 @@ export default function LancamentoMassa() {
                       saving={saving}
                       isLast={i === alunosNota.length - 1}
                       onNextRow={focarProximaLinha}
+                      disabled={false}   // warn but don't block — period check is advisory
                     />
                   ))}
                 </tbody>

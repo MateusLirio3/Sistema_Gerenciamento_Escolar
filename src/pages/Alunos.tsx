@@ -226,7 +226,6 @@ function AlunoModal({ turmas, aluno, onClose, onSaved }: ModalProps) {
 
 // ── Row ───────────────────────────────────────────────────────────────────────
 
-// FIX 2: AlunoRow now correctly returns only a <tr>, not the entire page
 function AlunoRow({
   aluno,
   turmas,
@@ -269,7 +268,7 @@ function AlunoRow({
       <td className="px-6 py-3 font-medium text-gray-900">{aluno.nome}</td>
       <td className="px-6 py-3 text-gray-600">{turma?.nome ?? '—'}</td>
       <td className="px-6 py-3 text-gray-600">
-        {aluno.matricula != null ? BigInt(aluno.matricula) : '—'}
+        {aluno.matricula != null ? String(aluno.matricula) : '—'}
       </td>
       <td className="px-6 py-3 text-gray-600">
         {media != null ? media.toFixed(1) : '—'}
@@ -295,11 +294,7 @@ function AlunoRow({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AlunosPage() {
-  const { data, isLoading: loading, error, reload: refresh } = useSchoolData()
-    const alunos           = data?.alunos           ?? []
-    const turmas           = data?.turmas           ?? []
-    const notas            = data?.notas            ?? []
-    const turmaDisciplinas = data?.turmaDisciplinas ?? []
+  const { alunos, turmas, notas, turmaDisciplinas, loading, error, refresh } = useSchoolData()
 
   const [modal, setModal] = useState<{ open: boolean; aluno: Aluno | null }>({
     open: false,

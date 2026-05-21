@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import type { Etapa } from './useEtapas'
 
 export type Turma = {
   id: string
@@ -24,23 +25,23 @@ export type Nota = {
 export type Disciplina = { id: string; nome: string; area_id: string | null }
 export type TurmaDisciplina = { id: string; turma_id: string; disciplina_id: string }
 
-export type SchoolData = {
-  turmas: Turma[]
-  alunos: Aluno[]
-  notas: Nota[]
-  disciplinas: Disciplina[]
-  turmaDisciplinas: TurmaDisciplina[]
-}
+// Re-export Etapa so consumers can import from one place
+export type { Etapa }
 
 export function useSchoolData() {
-  const [data, setData] = useState<SchoolData | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [turmas, setTurmas]                     = useState<Turma[]>([])
+  const [alunos, setAlunos]                     = useState<Aluno[]>([])
+  const [notas, setNotas]                       = useState<Nota[]>([])
+  const [disciplinas, setDisciplinas]           = useState<Disciplina[]>([])
+  const [turmaDisciplinas, setTurmaDisciplinas] = useState<TurmaDisciplina[]>([])
+  const [etapas, setEtapas]                     = useState<Etapa[]>([])
+  const [loading, setLoading]                   = useState(true)
+  const [error, setError]                       = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
-      setIsLoading(true)
-      const [turmasRes, alunosRes, notasRes, disciplinasRes, turmaDisciplinasRes] =
+      setLoading(true)
+      const [turmasRes, alunosRes, notasRes, disciplinasRes, turmaDisciplinasRes, etapasRes] =
         await Promise.all([
           supabase
             .from('turmas')
@@ -52,33 +53,49 @@ export function useSchoolData() {
           supabase.from('notas').select('id,aluno_id,disciplina_id,etapa,nota,frequencia'),
           supabase.from('disciplinas').select('id,nome,area_id').order('nome'),
           supabase.from('turma_disciplinas').select('id,turma_id,disciplina_id'),
+          supabase.from('etapas').select('id,turma_id,numero,data_inicio,data_fim').order('numero'),
         ])
 
       const err =
-        turmasRes.error ||
-        alunosRes.error ||
-        notasRes.error ||
-        disciplinasRes.error ||
-        turmaDisciplinasRes.error
+        turmasRes.error          ||
+        alunosRes.error          ||
+        notasRes.error           ||
+        disciplinasRes.error     ||
+        turmaDisciplinasRes.error ||
+        etapasRes.error
       if (err) throw err
 
-      setData({
-        turmas:           (turmasRes.data           ?? []) as Turma[],
-        alunos:           (alunosRes.data           ?? []) as Aluno[],
-        notas:            (notasRes.data            ?? []) as Nota[],
-        disciplinas:      (disciplinasRes.data      ?? []) as Disciplina[],
-        turmaDisciplinas: (turmaDisciplinasRes.data ?? []) as TurmaDisciplina[],
-      })
+      setTurmas(          (turmasRes.data           ?? []) as Turma[])
+      setAlunos(          (alunosRes.data           ?? []) as Aluno[])
+      setNotas(           (notasRes.data            ?? []) as Nota[])
+      setDisciplinas(     (disciplinasRes.data      ?? []) as Disciplina[])
+      setTurmaDisciplinas((turmaDisciplinasRes.data ?? []) as TurmaDisciplina[])
+      setEtapas(          (etapasRes.data           ?? []) as Etapa[])
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erro desconhecido')
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }, [])
 
   useEffect(() => { load() }, [load])
 
-  return { data, isLoading, error, reload: load, refetch: load }
+  // Flat return — no more data?.alunos, just alunos directly.
+  // isLoading/reload/refetch aliases kept for back-compat with existing pages.
+  return {
+    turmas,
+    alunos,
+    notas,
+    disciplinas,
+    turmaDisciplinas,
+    etapas,
+    loading,
+    isLoading: loading,   // alias
+    error,
+    refresh: load,
+    reload:  load,        // alias
+    refetch: load,        // alias
+  }
 }
 
 export function formatNumber(value: number) {

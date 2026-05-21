@@ -1,3 +1,11 @@
+// Trecho para substituir apenas o componente TurmasPanel em Dashboard.tsx
+// O restante do arquivo permanece igual.
+//
+// Mudanças:
+// 1. TurmasPanel recebe etapas como prop
+// 2. Usa useTurmaProgress (com etapas) em vez de calcular inline
+// 3. Dashboard passa etapas para TurmasPanel
+
 import { Link, useNavigate } from 'react-router-dom'
 import {
   BookOpen,
@@ -14,21 +22,15 @@ import {
   type Aluno,
   type Nota,
   type TurmaDisciplina,
+  type Etapa,
 } from '../hooks/useSchoolData'
+import { useTurmaProgress } from '../hooks/useTurmaProgress'
 import { LoadingState, ErrorState, EmptyState } from '../components/States'
 
-// ─── StatCard ─────────────────────────────────────────────────────────────────
-
 function StatCard({
-  label,
-  value,
-  detail,
-  icon: Icon,
+  label, value, detail, icon: Icon,
 }: {
-  label: string
-  value: string
-  detail: string
-  icon: typeof BookOpen
+  label: string; value: string; detail: string; icon: typeof BookOpen
 }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5">
@@ -46,20 +48,20 @@ function StatCard({
   )
 }
 
-// ─── TurmasPanel ──────────────────────────────────────────────────────────────
+// ─── TurmasPanel — now uses useTurmaProgress with real etapas ─────────────────
 
 function TurmasPanel({
-  turmas,
-  alunos,
-  notas,
-  turmaDisciplinas,
+  turmas, alunos, notas, turmaDisciplinas, etapas,
 }: {
   turmas: Turma[]
   alunos: Aluno[]
   notas: Nota[]
   turmaDisciplinas: TurmaDisciplina[]
+  etapas: Etapa[]
 }) {
-  
+  // Single call — progress per turma with real etapa counts
+  const progresses = useTurmaProgress(turmas, alunos, notas, turmaDisciplinas, etapas)
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
       <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
@@ -75,71 +77,40 @@ function TurmasPanel({
         {turmas.length === 0 ? (
           <EmptyState text="Nenhuma turma cadastrada." />
         ) : (
-          turmas.map((turma) => {
-            const alunosTurma = alunos.filter((a) => a.turma_id === turma.id)
-            const disciplinasDaTurma = turmaDisciplinas
-              .filter((td) => td.turma_id === turma.id)
-              .map((td) => td.disciplina_id)
-
-            // Progresso: pares (aluno × disciplina) que têm pelo menos 1 nota lançada
-            const totalPares = alunosTurma.length * disciplinasDaTurma.length
-            const paresComNota = notas.filter(
-              (n) =>
-                n.nota !== null &&
-                alunosTurma.some((a) => a.id === n.aluno_id) &&
-                disciplinasDaTurma.includes(n.disciplina_id ?? '')
-            ).length
-
-            const progress = totalPares ? Math.round((paresComNota / totalPares) * 100) : 0
-            const pendencias = Math.max(totalPares - paresComNota, 0)
-
-            return (
-              <div
-                key={turma.id}
-                className="grid gap-3 px-6 py-4 md:grid-cols-[1fr_auto_auto] md:items-center"
-              >
-                <div>
-                  <p className="font-semibold text-gray-900">{turma.nome}</p>
-                  <p className="text-sm text-gray-400">
-                    Ano {turma.ano} · {alunosTurma.length} alunos
-                  </p>
-                </div>
-                <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    progress < 80 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'
-                  }`}
-                >
-                  {pendencias} pendências
-                </span>
-                <div className="min-w-[8rem]">
-                  <div className="h-1.5 rounded-full bg-gray-100">
-                    <div
-                      className="h-1.5 rounded-full bg-[#185FA5] transition-all"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-                  <p className="mt-1 text-right text-xs text-gray-400">{progress}%</p>
-                </div>
+          progresses.map(({ turma, alunosTurma, progress, pendencias }) => (
+            <div
+              key={turma.id}
+              className="grid gap-3 px-6 py-4 md:grid-cols-[1fr_auto_auto] md:items-center"
+            >
+              <div>
+                <p className="font-semibold text-gray-900">{turma.nome}</p>
+                <p className="text-sm text-gray-400">
+                  Ano {turma.ano} · {alunosTurma.length} alunos
+                </p>
               </div>
-            )
-          })
+              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                progress < 80 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'
+              }`}>
+                {pendencias} pendências
+              </span>
+              <div className="min-w-[8rem]">
+                <div className="h-1.5 rounded-full bg-gray-100">
+                  <div
+                    className="h-1.5 rounded-full bg-[#185FA5] transition-all"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <p className="mt-1 text-right text-xs text-gray-400">{progress}%</p>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>
   )
 }
 
-// ─── AcoesPanel ───────────────────────────────────────────────────────────────
-
-function AcoesPanel({
-  turmas,
-  alunos,
-  notas,
-}: {
-  turmas: number
-  alunos: number
-  notas: number
-}) {
+function AcoesPanel({ turmas, alunos, notas }: { turmas: number; alunos: number; notas: number }) {
   const items = [
     `${turmas} turma${turmas !== 1 ? 's' : ''} cadastrada${turmas !== 1 ? 's' : ''}`,
     `${alunos} aluno${alunos !== 1 ? 's' : ''} cadastrado${alunos !== 1 ? 's' : ''}`,
@@ -162,14 +133,12 @@ function AcoesPanel({
   )
 }
 
-// ─── QuickActions ─────────────────────────────────────────────────────────────
-
 function QuickActions() {
   const navigate = useNavigate()
   const actions = [
-    { label: 'Lançar notas por turma', icon: ClipboardList, path: '/notas/lancamento-massa' },
-    { label: 'Importar planilha XLSX', icon: Upload, path: '/importar' },
-    { label: 'Gerar boletim individual', icon: FileDown, path: '/boletins' },
+    { label: 'Lançar notas por turma',   icon: ClipboardList, path: '/notas/lancamento-massa' },
+    { label: 'Importar planilha XLSX',   icon: Upload,        path: '/importar'               },
+    { label: 'Gerar boletim individual', icon: FileDown,      path: '/boletins'               },
   ]
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
@@ -192,32 +161,20 @@ function QuickActions() {
   )
 }
 
-// ─── Helpers de média ─────────────────────────────────────────────────────────
-
-/**
- * Calcula a média correta: agrupa notas por disciplina → média de cada disciplina
- * → média das médias. Evita distorção por quantidade de etapas lançadas por disciplina.
- */
 function calcularMediaAluno(notasAluno: Nota[]): number | null {
   if (notasAluno.length === 0) return null
-
   const grupos = notasAluno.reduce<Record<string, number[]>>((acc, n) => {
     const key = n.disciplina_id ?? 'sem'
     if (!acc[key]) acc[key] = []
     acc[key].push(Number(n.nota))
     return acc
   }, {})
-
   const mediasPorDisciplina = Object.values(grupos).map(
     (ns) => ns.reduce((a, b) => a + b, 0) / ns.length
   )
-
   return mediasPorDisciplina.reduce((a, b) => a + b, 0) / mediasPorDisciplina.length
 }
 
-/**
- * Retorna true se o aluno tem pelo menos 1 nota em cada disciplina vinculada à turma.
- */
 function calcularStatusAluno(
   aluno: Aluno,
   notasAluno: Nota[],
@@ -226,20 +183,13 @@ function calcularStatusAluno(
   const disciplinasDaTurma = turmaDisciplinas
     .filter((td) => td.turma_id === aluno.turma_id)
     .map((td) => td.disciplina_id)
-
   if (disciplinasDaTurma.length === 0) return false
-
   const disciplinasComNota = new Set(notasAluno.map((n) => n.disciplina_id))
   return disciplinasDaTurma.every((id) => disciplinasComNota.has(id))
 }
 
-// ─── AlunosRecentes ───────────────────────────────────────────────────────────
-
 function AlunosRecentes({
-  alunos,
-  turmas,
-  notas,
-  turmaDisciplinas,
+  alunos, turmas, notas, turmaDisciplinas,
 }: {
   alunos: Aluno[]
   turmas: Turma[]
@@ -247,7 +197,6 @@ function AlunosRecentes({
   turmaDisciplinas: TurmaDisciplina[]
 }) {
   const navigate = useNavigate()
-
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
       <div className="border-b border-gray-100 px-6 py-4">
@@ -261,25 +210,16 @@ function AlunosRecentes({
             <thead className="border-b border-gray-100 text-left">
               <tr>
                 {['Aluno', 'Turma', 'Média', 'Status'].map((h) => (
-                  <th
-                    key={h}
-                    className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500"
-                  >
-                    {h}
-                  </th>
+                  <th key={h} className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {alunos.map((student) => {
                 const turma = turmas.find((t) => t.id === student.turma_id)
-                const notasAluno = notas.filter(
-                  (n) => n.aluno_id === student.id && n.nota !== null
-                )
-
+                const notasAluno = notas.filter((n) => n.aluno_id === student.id && n.nota !== null)
                 const media = calcularMediaAluno(notasAluno)
                 const statusCompleto = calcularStatusAluno(student, notasAluno, turmaDisciplinas)
-
                 return (
                   <tr
                     key={student.id}
@@ -292,34 +232,18 @@ function AlunosRecentes({
                       {media === null ? (
                         <span className="text-gray-400">—</span>
                       ) : (
-                        <span
-                          className={`font-semibold ${
-                            media >= 7
-                              ? 'text-green-600'
-                              : media >= 5
-                              ? 'text-amber-600'
-                              : 'text-red-600'
-                          }`}
-                        >
+                        <span className={`font-semibold ${media >= 7 ? 'text-green-600' : media >= 5 ? 'text-amber-600' : 'text-red-600'}`}>
                           {formatNumber(media)}
                         </span>
                       )}
                     </td>
                     <td className="px-6 py-3.5">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          statusCompleto
-                            ? 'bg-green-50 text-green-700'
-                            : notasAluno.length
-                            ? 'bg-amber-50 text-amber-700'
-                            : 'bg-red-50 text-red-600'
-                        }`}
-                      >
-                        {statusCompleto
-                          ? 'Com notas'
-                          : notasAluno.length
-                          ? 'Incompleto'
-                          : 'Pendente'}
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                        statusCompleto ? 'bg-green-50 text-green-700'
+                        : notasAluno.length ? 'bg-amber-50 text-amber-700'
+                        : 'bg-red-50 text-red-600'
+                      }`}>
+                        {statusCompleto ? 'Com notas' : notasAluno.length ? 'Incompleto' : 'Pendente'}
                       </span>
                     </td>
                   </tr>
@@ -333,60 +257,46 @@ function AlunosRecentes({
   )
 }
 
-// ─── Dashboard (página principal) ─────────────────────────────────────────────
+// ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const { data, isLoading, error } = useSchoolData()
+  const { turmas, alunos, notas, turmaDisciplinas, etapas, isLoading, error } = useSchoolData()
 
   if (isLoading) return <LoadingState />
-  if (error) return <ErrorState message={error} />
+  if (error)     return <ErrorState message={error} />
 
-  const turmas           = data?.turmas           ?? []
-  const alunos           = data?.alunos           ?? []
-  const notas            = data?.notas            ?? []
-  const turmaDisciplinas = data?.turmaDisciplinas ?? []
-
-  // Boletins prontos = alunos que têm notas em todas as disciplinas da turma
   const boletinsProntos = alunos.filter((a) => {
     const notasAluno = notas.filter((n) => n.aluno_id === a.id && n.nota !== null)
     return calcularStatusAluno(a, notasAluno, turmaDisciplinas)
   }).length
 
   const stats = [
-    { label: 'Turmas ativas',    value: String(turmas.length),    detail: 'cadastradas',   icon: BookOpen    },
-    { label: 'Alunos',           value: String(alunos.length),    detail: 'matriculados',  icon: UsersRound  },
-    { label: 'Boletins prontos', value: String(boletinsProntos),  detail: 'notas completas', icon: FileDown  },
+    { label: 'Turmas ativas',    value: String(turmas.length),   detail: 'cadastradas',    icon: BookOpen   },
+    { label: 'Alunos',           value: String(alunos.length),   detail: 'matriculados',   icon: UsersRound },
+    { label: 'Boletins prontos', value: String(boletinsProntos), detail: 'notas completas', icon: FileDown  },
   ]
 
   return (
     <div className="space-y-6">
-      {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {stats.map((stat) => (
-          <StatCard key={stat.label} {...stat} />
-        ))}
+        {stats.map((stat) => <StatCard key={stat.label} {...stat} />)}
       </div>
 
-      {/* Turmas + Ações */}
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        {/* Pass etapas so TurmasPanel uses real etapa counts */}
         <TurmasPanel
           turmas={turmas}
           alunos={alunos}
           notas={notas}
           turmaDisciplinas={turmaDisciplinas}
+          etapas={etapas}
         />
         <AcoesPanel turmas={turmas.length} alunos={alunos.length} notas={notas.length} />
       </div>
 
-      {/* Quick Actions + Alunos */}
       <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
         <QuickActions />
-        <AlunosRecentes
-          alunos={alunos}
-          turmas={turmas}
-          notas={notas}
-          turmaDisciplinas={turmaDisciplinas}
-        />
+        <AlunosRecentes alunos={alunos} turmas={turmas} notas={notas} turmaDisciplinas={turmaDisciplinas} />
       </div>
     </div>
   )

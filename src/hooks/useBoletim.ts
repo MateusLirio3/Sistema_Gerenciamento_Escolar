@@ -1,32 +1,63 @@
+// src/hooks/useBoletim.ts
+
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { formatDataEtapa, type Etapa } from "./useEtapas";
 
 export interface NotaDisciplina {
   disciplina_id: string;
   disciplina_nome: string;
+
   area_id: string;
   area_nome: string;
-  frequencia: number | null; // da etapa mais recente com frequência lançada
+
+  frequencia: number | null;
+
   nota1: number | null;
   nota2: number | null;
   nota3: number | null;
+
   mediaFinal: number | null;
 }
 
 export interface BoletimData {
-  aluno: { id: string; nome: string };
-  turma: { nome: string; ano: number };
+  aluno: {
+    id: string;
+    nome: string;
+  };
+
+  turma: {
+    nome: string;
+    ano: number;
+  };
+
   dataEmissao: string;
+
   etapa: number;
+
+  datasEtapas: {
+    etapa1Fim: string;
+    etapa2Fim: string;
+    etapa3Fim: string;
+  };
+
   disciplinas: NotaDisciplina[];
+
   resumo: {
     freqGlobal: number;
+
     mediaEtapa1: number | null;
     mediaEtapa2: number | null;
     mediaEtapa3: number | null;
-    qtdAbaixoMedia: number; 
-    situacaoFinal: "APROVADO" | "REPROVADO" | "CURSANDO";
-    crCurso: number | null; 
+
+    qtdAbaixoMedia: number;
+
+    situacaoFinal:
+      | "APROVADO"
+      | "REPROVADO"
+      | "CURSANDO";
+
+    crCurso: number | null;
   };
 }
 
@@ -35,13 +66,24 @@ const FREQ_MINIMA = 75;
 
 function media(arr: number[]): number | null {
   if (arr.length === 0) return null;
-  return Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10) / 10;
+
+  return (
+    Math.round(
+      (arr.reduce((a, b) => a + b, 0) / arr.length) * 10
+    ) / 10
+  );
 }
 
-export function useBoletim(alunoId: string, etapa?: number) {
+export function useBoletim(
+  alunoId: string,
+  etapa?: number
+) {
   const [data, setData] = useState<BoletimData | null>(null);
+
   const [loading, setLoading] = useState(true);
+
   const [error, setError] = useState<string | null>(null);
+
   const etapaAtual = etapa ?? 3;
 
   useEffect(() => {
@@ -52,169 +94,421 @@ export function useBoletim(alunoId: string, etapa?: number) {
       setError(null);
 
       try {
-        // 1. Busca aluno + turma via turma_id direto em alunos
-        const { data: alunoData, error: alunoError } = await supabase
+        // ─────────────────────────────────────────────
+        // 1. Aluno + turma
+        // ─────────────────────────────────────────────
+
+        const {
+          data: alunoData,
+          error: alunoError,
+        } = await supabase
           .from("alunos")
-          .select(`id, nome, turmas (id, nome, ano)`)
+          .select(`
+            id,
+            nome,
+            turmas (
+              id,
+              nome,
+              ano
+            )
+          `)
           .eq("id", alunoId)
           .single();
 
-        if (alunoError) throw alunoError;
+        if (alunoError) {
+          throw alunoError;
+        }
 
         const turma = alunoData.turmas as any;
-        const turmaId: string = turma?.id;
 
-        if (!turmaId) throw new Error("Turma não encontrada para o aluno.");
+        const turmaId: string | undefined = turma?.id;
 
-        // 2. Busca todas as disciplinas vinculadas à turma (com área)
-        const { data: turmaDisciplinasData, error: tdError } = await supabase
+        if (!turmaId) {
+          throw new Error(
+            "Turma não encontrada para o aluno."
+          );
+        }
+
+        // ─────────────────────────────────────────────
+        // 2. Disciplinas da turma
+        // ─────────────────────────────────────────────
+
+        const {
+          data: turmaDisciplinasData,
+          error: tdError,
+        } = await supabase
           .from("turma_disciplinas")
           .select(`
             disciplina_id,
+
             disciplinas (
               id,
               nome,
-              areas ( id, nome )
+
+              areas (
+                id,
+                nome
+              )
             )
           `)
           .eq("turma_id", turmaId);
 
-        if (tdError) throw tdError;
+        if (tdError) {
+          throw tdError;
+        }
 
-        // 3. Monta o mapa de disciplinas
-        const map = new Map<string, NotaDisciplina>();
+        // DEBUG opcional
+        console.log(
+          "turmaDisciplinasData:",
+          turmaDisciplinasData
+        );
+
+        // ─────────────────────────────────────────────
+        // 3. Etapas da turma
+        // ─────────────────────────────────────────────
+
+        const { data: etapasData } = await supabase
+          .from("etapas")
+          .select(`
+            id,
+            turma_id,
+            numero,
+            data_inicio,
+            data_fim
+          `)
+          .eq("turma_id", turmaId)
+          .order("numero");
+
+        const etapasList = (etapasData ??
+          []) as Etapa[];
+
+        const findEtapa = (n: 1 | 2 | 3) =>
+          etapasList.find(
+            (e) => e.numero === n
+          ) ?? null;
+
+        const datasEtapas = {
+          etapa1Fim: formatDataEtapa(
+            findEtapa(1)?.data_fim ?? null
+          ),
+
+          etapa2Fim: formatDataEtapa(
+            findEtapa(2)?.data_fim ?? null
+          ),
+
+          etapa3Fim: formatDataEtapa(
+            findEtapa(3)?.data_fim ?? null
+          ),
+        };
+
+        // ─────────────────────────────────────────────
+        // 4. Mapa de disciplinas
+        // ─────────────────────────────────────────────
+
+        const map = new Map<
+          string,
+          NotaDisciplina
+        >();
 
         for (const row of turmaDisciplinasData ?? []) {
           const disc = row.disciplinas as any;
-          const area = disc?.areas as any;
-          const discId: string = disc?.id;
+
+          if (!disc) continue;
+
+          const discId: string = disc.id;
+
           if (!discId) continue;
+
+          // IMPORTANTE:
+          // areas pode vir objeto OU array
+          const areaRaw = disc.areas;
+
+          const area = Array.isArray(areaRaw)
+            ? areaRaw[0]
+            : areaRaw;
 
           map.set(discId, {
             disciplina_id: discId,
-            disciplina_nome: disc?.nome ?? "",
-            area_id: area?.id ?? "",
-            area_nome: area?.nome ?? "",
+
+            disciplina_nome:
+              disc.nome ?? "Sem disciplina",
+
+            area_id:
+              area?.id ?? "sem-area",
+
+            area_nome:
+              area?.nome ?? "Sem área",
+
             frequencia: null,
+
             nota1: null,
             nota2: null,
             nota3: null,
+
             mediaFinal: null,
           });
         }
 
-        // 4. Busca todas as notas do aluno (todas as etapas de uma vez)
-        const { data: notasData, error: notasError } = await supabase
+        // ─────────────────────────────────────────────
+        // 5. Notas do aluno
+        // ─────────────────────────────────────────────
+
+        const {
+          data: notasData,
+          error: notasError,
+        } = await supabase
           .from("notas")
-          .select(`etapa, nota, frequencia, disciplina_id`)
+          .select(`
+            etapa,
+            nota,
+            frequencia,
+            disciplina_id
+          `)
           .eq("aluno_id", alunoId)
-          .lte("etapa", etapaAtual) // só etapas até a atual
-          .order("etapa", { ascending: true });
+          .lte("etapa", etapaAtual)
+          .order("etapa", {
+            ascending: true,
+          });
 
-        if (notasError) throw notasError;
+        if (notasError) {
+          throw notasError;
+        }
 
-        // 5. Preenche notas e frequências
-        // FIX: frequência usa a etapa mais recente disponível (não só a etapaAtual)
-        const freqPorDisc = new Map<string, { etapa: number; valor: number }>();
+        const freqPorDisc = new Map<
+          string,
+          {
+            etapa: number;
+            valor: number;
+          }
+        >();
 
         for (const row of notasData ?? []) {
-          const discId: string = row.disciplina_id;
-          if (!map.has(discId)) continue;
+          const discId: string =
+            row.disciplina_id;
+
+          if (!map.has(discId)) {
+            continue;
+          }
 
           const entry = map.get(discId)!;
 
-          // Preenche as notas por etapa
-          if (row.etapa === 1) entry.nota1 = row.nota;
-          if (row.etapa === 2) entry.nota2 = row.nota;
-          if (row.etapa === 3) entry.nota3 = row.nota;
+          if (row.etapa === 1) {
+            entry.nota1 = row.nota;
+          }
 
-          // FIX: guarda a frequência da etapa mais recente disponível
+          if (row.etapa === 2) {
+            entry.nota2 = row.nota;
+          }
+
+          if (row.etapa === 3) {
+            entry.nota3 = row.nota;
+          }
+
           if (row.frequencia !== null) {
-            const atual = freqPorDisc.get(discId);
-            if (!atual || row.etapa > atual.etapa) {
-              freqPorDisc.set(discId, { etapa: row.etapa, valor: row.frequencia });
+            const atual =
+              freqPorDisc.get(discId);
+
+            if (
+              !atual ||
+              row.etapa > atual.etapa
+            ) {
+              freqPorDisc.set(discId, {
+                etapa: row.etapa,
+                valor: row.frequencia,
+              });
             }
           }
         }
 
-        // Aplica frequências ao mapa
-        for (const [discId, { valor }] of freqPorDisc.entries()) {
+        // ─────────────────────────────────────────────
+        // 6. Frequência final
+        // ─────────────────────────────────────────────
+
+        for (const [
+          discId,
+          { valor },
+        ] of freqPorDisc.entries()) {
           const entry = map.get(discId);
-          if (entry) entry.frequencia = valor;
+
+          if (entry) {
+            entry.frequencia = valor;
+          }
         }
 
-        // 6. Calcula a média final de cada disciplina até a etapaAtual
+        // ─────────────────────────────────────────────
+        // 7. Médias finais
+        // ─────────────────────────────────────────────
+
         const disciplinas: NotaDisciplina[] = [];
+
         for (const disc of map.values()) {
-          let notasParaMedia: number[] = [];
+          const notasParaMedia: number[] = [];
 
-          if (etapaAtual >= 1 && disc.nota1 !== null) notasParaMedia.push(disc.nota1);
-          if (etapaAtual >= 2 && disc.nota2 !== null) notasParaMedia.push(disc.nota2);
-          if (etapaAtual >= 3 && disc.nota3 !== null) notasParaMedia.push(disc.nota3);
+          if (
+            etapaAtual >= 1 &&
+            disc.nota1 !== null
+          ) {
+            notasParaMedia.push(disc.nota1);
+          }
 
-          disc.mediaFinal = media(notasParaMedia);
+          if (
+            etapaAtual >= 2 &&
+            disc.nota2 !== null
+          ) {
+            notasParaMedia.push(disc.nota2);
+          }
+
+          if (
+            etapaAtual >= 3 &&
+            disc.nota3 !== null
+          ) {
+            notasParaMedia.push(disc.nota3);
+          }
+
+          disc.mediaFinal =
+            media(notasParaMedia);
+
           disciplinas.push(disc);
         }
 
-        // 7. Estatísticas
+        console.log(
+          "disciplinas finais:",
+          disciplinas
+        );
 
-        // FIX: freqGlobal — só considera disciplinas com frequência lançada
+        // ─────────────────────────────────────────────
+        // 8. Estatísticas
+        // ─────────────────────────────────────────────
+
         const freqs = disciplinas
           .map((d) => d.frequencia)
-          .filter((f): f is number => f !== null);
-        const freqGlobal = freqs.length > 0 ? (media(freqs) ?? 0) : 0;
-        const temFrequencia = freqs.length > 0;
+          .filter(
+            (f): f is number =>
+              f !== null
+          );
 
-        // Médias por etapa (média de todas as notas daquela etapa)
-        const notas1 = disciplinas.map((d) => d.nota1).filter((n): n is number => n !== null);
-        const notas2 = disciplinas.map((d) => d.nota2).filter((n): n is number => n !== null);
-        const notas3 = disciplinas.map((d) => d.nota3).filter((n): n is number => n !== null);
+        const freqGlobal =
+          freqs.length > 0
+            ? media(freqs) ?? 0
+            : 0;
 
-        const mediaEtapa1 = media(notas1);
-        const mediaEtapa2 = media(notas2);
-        const mediaEtapa3 = media(notas3);
+        const temFrequencia =
+          freqs.length > 0;
 
-        // FIX: qtdAbaixoMedia conta médias finais abaixo do mínimo (não notas de etapa isoladas)
-        const qtdAbaixoMedia = disciplinas.filter(
-          (d) => d.mediaFinal !== null && d.mediaFinal < NOTA_MINIMA
-        ).length;
+        const notas1 = disciplinas
+          .map((d) => d.nota1)
+          .filter(
+            (n): n is number =>
+              n !== null
+          );
 
-        // FIX: situacaoFinal não reprova por frequência se não há frequência lançada ainda
-        let situacaoFinal: BoletimData["resumo"]["situacaoFinal"];
+        const notas2 = disciplinas
+          .map((d) => d.nota2)
+          .filter(
+            (n): n is number =>
+              n !== null
+          );
+
+        const notas3 = disciplinas
+          .map((d) => d.nota3)
+          .filter(
+            (n): n is number =>
+              n !== null
+          );
+
+        const qtdAbaixoMedia =
+          disciplinas.filter(
+            (d) =>
+              d.mediaFinal !== null &&
+              d.mediaFinal < NOTA_MINIMA
+          ).length;
+
+        let situacaoFinal:
+          | "APROVADO"
+          | "REPROVADO"
+          | "CURSANDO";
 
         if (etapaAtual === 3) {
-          const freqOk = !temFrequencia || freqGlobal >= FREQ_MINIMA;
-          situacaoFinal = qtdAbaixoMedia === 0 && freqOk ? "APROVADO" : "REPROVADO";
+          const freqOk =
+            !temFrequencia ||
+            freqGlobal >= FREQ_MINIMA;
+
+          situacaoFinal =
+            qtdAbaixoMedia === 0 &&
+            freqOk
+              ? "APROVADO"
+              : "REPROVADO";
         } else {
           situacaoFinal = "CURSANDO";
         }
 
-        // 8. C.R. (Coeficiente de Rendimento) = média das médias finais das disciplinas
-        const mediasFinais = disciplinas
-          .map((d) => d.mediaFinal)
-          .filter((m): m is number => m !== null);
+        const mediasFinais =
+          disciplinas
+            .map((d) => d.mediaFinal)
+            .filter(
+              (m): m is number =>
+                m !== null
+            );
 
-        const crCurso = media(mediasFinais);
+        const crCurso =
+          media(mediasFinais);
+
+        // ─────────────────────────────────────────────
+        // 9. Resultado final
+        // ─────────────────────────────────────────────
 
         setData({
-          aluno: { id: alunoData.id, nome: alunoData.nome },
-          turma: { nome: turma?.nome ?? "", ano: turma?.ano ?? 0 },
-          dataEmissao: new Date().toLocaleDateString("pt-BR"),
+          aluno: {
+            id: alunoData.id,
+            nome: alunoData.nome,
+          },
+
+          turma: {
+            nome: turma?.nome ?? "",
+            ano: turma?.ano ?? 0,
+          },
+
+          dataEmissao:
+            new Date().toLocaleDateString(
+              "pt-BR"
+            ),
+
           etapa: etapaAtual,
+
+          datasEtapas,
+
           disciplinas,
+
           resumo: {
-            freqGlobal: Math.round(freqGlobal),
-            mediaEtapa1,
-            mediaEtapa2,
-            mediaEtapa3,
+            freqGlobal:
+              Math.round(freqGlobal),
+
+            mediaEtapa1:
+              media(notas1),
+
+            mediaEtapa2:
+              media(notas2),
+
+            mediaEtapa3:
+              media(notas3),
+
             qtdAbaixoMedia,
+
             situacaoFinal,
+
             crCurso,
           },
         });
       } catch (err: any) {
-        console.error("Erro ao buscar boletim:", err);
-        setError(err.message ?? "Erro ao buscar boletim");
+        console.error(
+          "Erro ao buscar boletim:",
+          err
+        );
+
+        setError(
+          err.message ??
+            "Erro ao buscar boletim"
+        );
       } finally {
         setLoading(false);
       }
@@ -223,5 +517,9 @@ export function useBoletim(alunoId: string, etapa?: number) {
     fetchBoletim();
   }, [alunoId, etapaAtual]);
 
-  return { data, loading, error };
+  return {
+    data,
+    loading,
+    error,
+  };
 }

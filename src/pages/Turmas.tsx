@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useSchoolData, type Turma, type Aluno, type Nota, type TurmaDisciplina } from '../hooks/useSchoolData'
+import { useSchoolData, type Turma, type Aluno, type Nota, type TurmaDisciplina, type Etapa } from '../hooks/useSchoolData'
 import { useTurmaProgress } from '../hooks/useTurmaProgress'
 import { LoadingState, ErrorState, EmptyState } from '../components/States'
 import { Pencil, Trash2, Plus, X, Check, AlertCircle } from 'lucide-react'
@@ -59,8 +59,6 @@ function TurmaForm({ initial, loading, error, onSubmit, onCancel, submitLabel }:
           <AlertCircle className="h-4 w-4 shrink-0" />{error}
         </div>
       )}
-
-      {/* Nome */}
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-gray-700">
           Nome da turma <span className="text-red-500">*</span>
@@ -74,13 +72,9 @@ function TurmaForm({ initial, loading, error, onSubmit, onCancel, submitLabel }:
           autoFocus
         />
       </div>
-
-      {/* Série + Ano lado a lado */}
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-gray-700">
-            Série <span className="text-red-500">*</span>
-          </label>
+          <label className="text-sm font-medium text-gray-700">Série <span className="text-red-500">*</span></label>
           <select
             value={serie}
             onChange={(e) => setSerie(Number(e.target.value) as 1 | 2 | 3)}
@@ -91,11 +85,8 @@ function TurmaForm({ initial, loading, error, onSubmit, onCancel, submitLabel }:
             ))}
           </select>
         </div>
-
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-gray-700">
-            Ano letivo <span className="text-red-500">*</span>
-          </label>
+          <label className="text-sm font-medium text-gray-700">Ano letivo <span className="text-red-500">*</span></label>
           <input
             type="number"
             value={ano}
@@ -105,13 +96,8 @@ function TurmaForm({ initial, loading, error, onSubmit, onCancel, submitLabel }:
           />
         </div>
       </div>
-
       <div className="flex justify-end gap-2 pt-1">
-        <button
-          onClick={onCancel}
-          disabled={loading}
-          className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
-        >
+        <button onClick={onCancel} disabled={loading} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
           Cancelar
         </button>
         <button
@@ -148,22 +134,25 @@ function SerieBadge({ serie }: { serie: 1 | 2 | 3 }) {
 // ─── Linha da tabela ──────────────────────────────────────────────────────────
 
 function TurmaRow({
-  turma, alunos, notas, turmaDisciplinas, onEdit, onDelete,
+  turma, alunos, notas, turmaDisciplinas, etapas, onEdit, onDelete,
 }: {
   turma: Turma
   alunos: Aluno[]
   notas: Nota[]
   turmaDisciplinas: TurmaDisciplina[]
+  etapas: Etapa[]
   onEdit: (turma: Turma) => void
   onDelete: (turma: Turma) => void
 }) {
   const navigate = useNavigate()
-  const [{ alunosTurma, progress, pendencias }] = useTurmaProgress([turma], alunos, notas, turmaDisciplinas)
+  // Pass etapas so progress uses real etapa count per turma
+  const [{ alunosTurma, progress, pendencias }] = useTurmaProgress(
+    [turma], alunos, notas, turmaDisciplinas, etapas
+  )
   const temAlunos = alunosTurma.length > 0
 
   return (
     <div className="grid gap-3 px-6 py-4 hover:bg-gray-50 transition-colors md:grid-cols-[1fr_auto_auto_auto_auto] md:items-center">
-      {/* Info */}
       <div className="cursor-pointer" onClick={() => navigate(`/turmas/${turma.id}`)}>
         <div className="flex items-center gap-2">
           <p className="font-semibold text-gray-900">{turma.nome}</p>
@@ -174,14 +163,12 @@ function TurmaRow({
         </p>
       </div>
 
-      {/* Pendências */}
       <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
         progress < 80 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'
       }`}>
         {pendencias} pendência{pendencias !== 1 ? 's' : ''}
       </span>
 
-      {/* Barra */}
       <div className="min-w-[8rem]">
         <div className="h-1.5 rounded-full bg-gray-100">
           <div className="h-1.5 rounded-full bg-[#185FA5] transition-all" style={{ width: `${progress}%` }} />
@@ -189,13 +176,8 @@ function TurmaRow({
         <p className="mt-1 text-right text-xs text-gray-400">{progress}%</p>
       </div>
 
-      {/* Ações */}
       <div className="flex items-center gap-1">
-        <button
-          onClick={() => onEdit(turma)}
-          className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-          title="Editar turma"
-        >
+        <button onClick={() => onEdit(turma)} className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors" title="Editar turma">
           <Pencil className="h-4 w-4" />
         </button>
         <button
@@ -221,19 +203,14 @@ type ModalState =
 
 export default function Turmas() {
   const navigate = useNavigate()
-  const { data, isLoading, error, reload } = useSchoolData()
-  const [modal, setModal]       = useState<ModalState>({ type: 'none' })
-  const [saving, setSaving]     = useState(false)
+  const { turmas, alunos, notas, turmaDisciplinas, etapas, isLoading, error, reload } = useSchoolData()
+  const [modal, setModal]         = useState<ModalState>({ type: 'none' })
+  const [saving, setSaving]       = useState(false)
   const [formError, setFormError] = useState('')
   const [filtroSerie, setFiltroSerie] = useState<'todas' | '1' | '2' | '3'>('todas')
 
   if (isLoading) return <LoadingState />
   if (error)     return <ErrorState message={error} />
-
-  const turmas           = data?.turmas           ?? []
-  const alunos           = data?.alunos           ?? []
-  const notas            = data?.notas            ?? []
-  const turmaDisciplinas = data?.turmaDisciplinas ?? []
 
   const turmasFiltradas = filtroSerie === 'todas'
     ? turmas
@@ -283,7 +260,6 @@ export default function Turmas() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Filtro por série */}
             <select
               value={filtroSerie}
               onChange={(e) => setFiltroSerie(e.target.value as typeof filtroSerie)}
@@ -315,6 +291,7 @@ export default function Turmas() {
                 alunos={alunos}
                 notas={notas}
                 turmaDisciplinas={turmaDisciplinas}
+                etapas={etapas}
                 onEdit={(t) => abrirModal({ type: 'editar', turma: t })}
                 onDelete={(t) => abrirModal({ type: 'excluir', turma: t })}
               />
@@ -323,14 +300,11 @@ export default function Turmas() {
         </div>
       </div>
 
-      {/* Modal Criar */}
       {modal.type === 'criar' && (
         <Modal title="Nova turma" onClose={() => setModal({ type: 'none' })}>
           <TurmaForm loading={saving} error={formError} onSubmit={handleCriar} onCancel={() => setModal({ type: 'none' })} submitLabel="Criar turma" />
         </Modal>
       )}
-
-      {/* Modal Editar */}
       {modal.type === 'editar' && (
         <Modal title="Editar turma" onClose={() => setModal({ type: 'none' })}>
           <TurmaForm
@@ -342,8 +316,6 @@ export default function Turmas() {
           />
         </Modal>
       )}
-
-      {/* Modal Excluir */}
       {modal.type === 'excluir' && (
         <Modal title="Excluir turma" onClose={() => setModal({ type: 'none' })}>
           <div className="flex flex-col gap-4">
@@ -358,12 +330,10 @@ export default function Turmas() {
               Esta ação não pode ser desfeita.
             </p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setModal({ type: 'none' })} disabled={saving}
-                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
+              <button onClick={() => setModal({ type: 'none' })} disabled={saving} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50">
                 Cancelar
               </button>
-              <button onClick={handleExcluir} disabled={saving}
-                className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors disabled:opacity-50">
+              <button onClick={handleExcluir} disabled={saving} className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors disabled:opacity-50">
                 {saving && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />}
                 Excluir
               </button>

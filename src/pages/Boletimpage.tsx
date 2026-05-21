@@ -13,7 +13,6 @@ export default function BoletimPage() {
   const navigate = useNavigate();
   const onClose = () => navigate(-1);
 
-  // Etapa vem da query string (?etapa=1|2|3). Fallback: 3
   const etapaNum = Math.min(3, Math.max(1, Number(searchParams.get("etapa") ?? "3")));
 
   // ── Dados ───────────────────────────────────────────────────────────────────
