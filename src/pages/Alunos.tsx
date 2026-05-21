@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
 import {
   useSchoolData,
@@ -13,6 +15,8 @@ import { LoadingState, ErrorState, EmptyState } from '../components/States'
 
 // ── Status helpers ────────────────────────────────────────────────────────────
 
+// ── Status helpers ────────────────────────────────────────────────────────────
+
 function getStatusNotas(
   aluno: Aluno,
   notas: Nota[],
@@ -23,23 +27,23 @@ function getStatusNotas(
   const disciplinasDaTurma = turmaDisciplinas
     .filter((td) => td.turma_id === aluno.turma_id)
     .map((td) => td.disciplina_id)
-
   if (disciplinasDaTurma.length === 0) return 'pendente'
 
   const disciplinasComNota = new Set(
-    notas
-      .filter((n) => n.aluno_id === aluno.id && n.nota !== null)
-      .map((n) => n.disciplina_id)
+    notas.filter((n) => n.aluno_id === aluno.id && n.nota !== null).map((n) => n.disciplina_id)
   )
 
   const totalComNota = disciplinasDaTurma.filter((id) => disciplinasComNota.has(id)).length
-
   if (totalComNota === 0) return 'pendente'
+  if (totalComNota === disciplinasDaTurma.length) return 'completo'
   if (totalComNota === disciplinasDaTurma.length) return 'completo'
   return 'parcial'
 }
 
 const STATUS_CONFIG = {
+  completo: { label: 'Com notas',     className: 'bg-green-50 text-green-700' },
+  parcial:  { label: 'Incompleto',    className: 'bg-amber-50 text-amber-700' },
+  pendente: { label: 'Nota pendente', className: 'bg-red-50 text-red-600'    },
   completo: { label: 'Com notas',     className: 'bg-green-50 text-green-700' },
   parcial:  { label: 'Incompleto',    className: 'bg-amber-50 text-amber-700' },
   pendente: { label: 'Nota pendente', className: 'bg-red-50 text-red-600'    },
@@ -233,11 +237,13 @@ function AlunoRow({
   notas,
   turmaDisciplinas,
   onEdit,
+  onEdit,
 }: {
   aluno: Aluno
   turmas: Turma[]
   notas: Nota[]
   turmaDisciplinas: TurmaDisciplina[]
+  onEdit: (aluno: Aluno) => void
   onEdit: (aluno: Aluno) => void
 }) {
   const navigate = useNavigate()
@@ -302,9 +308,24 @@ function AlunoRow({
         className="cursor-pointer px-6 py-3.5"
         onClick={() => navigate(`/aluno/${aluno.id}`)}
       >
+      <td
+        className="cursor-pointer px-6 py-3.5"
+        onClick={() => navigate(`/aluno/${aluno.id}`)}
+      >
         <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>
           {label}
         </span>
+      </td>
+      <td className="px-4 py-3.5 text-right">
+        <button
+          onClick={() => onEdit(aluno)}
+          className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+          title="Editar aluno"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
+          </svg>
+        </button>
       </td>
       <td className="px-4 py-3.5 text-right">
         <button
@@ -323,6 +344,8 @@ function AlunoRow({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function Alunos() {
   const { data, isLoading, error, reload } = useSchoolData()
   const [modal, setModal] = useState<{ open: boolean; aluno: Aluno | null }>({
@@ -331,6 +354,7 @@ export default function Alunos() {
   })
 
   if (isLoading) return <LoadingState />
+  if (error)     return <ErrorState message={error} />
   if (error)     return <ErrorState message={error} />
 
   const alunos           = data?.alunos           ?? []
@@ -344,6 +368,73 @@ export default function Alunos() {
   function onSaved() { closeModal(); reload?.() }
 
   return (
+    <>
+      {modal.open && (
+        <AlunoModal
+          turmas={turmas}
+          aluno={modal.aluno}
+          onClose={closeModal}
+          onSaved={onSaved}
+        />
+      )}
+
+      <div className="rounded-xl border border-gray-200 bg-white">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Cadastro e acompanhamento de alunos
+            </h2>
+            <p className="mt-0.5 text-sm text-gray-400">{alunos.length} alunos matriculados</p>
+          </div>
+          <button
+            onClick={openCreate}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Novo aluno
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
+          {alunos.length === 0 ? (
+            <EmptyState text="Nenhum aluno cadastrado." />
+          ) : (
+            <table className="w-full min-w-[640px] text-sm">
+              <thead className="border-b border-gray-100 text-left">
+                <tr>
+                  {['Aluno', 'Turma', 'Matrícula', 'Média', 'Status', ''].map((h) => (
+                    <th
+                      key={h}
+                      className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {[...alunos]
+                  .sort((a, b) =>
+                    a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true, sensitivity: 'base' })
+                  )
+                  .map((aluno) => (
+                    <AlunoRow
+                      key={aluno.id}
+                      aluno={aluno}
+                      turmas={turmas}
+                      notas={notas}
+                      turmaDisciplinas={turmaDisciplinas}
+                      onEdit={openEdit}
+                    />
+                  ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </>
     <>
       {modal.open && (
         <AlunoModal

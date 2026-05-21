@@ -10,6 +10,7 @@ import Turma from './pages/Turma'
 import Alunos from './pages/Alunos'
 import Aluno from './pages/Aluno'
 import LancamentoNotas from './pages/LancamentoNotas'
+import LancamentoMassa from './pages/Lancamentomassa'
 import Importar from './pages/Importar'
 import Boletins from './pages/Boletins'
 import Disciplinas from './pages/Disciplinas'
@@ -26,7 +27,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path='/' element={<Navigate to="/login" replace />} />
 
-        {/* Rotas privadas — todas usam o lLayout com sidebar */}
+        {/* Rotas privadas — todas usam o Layout com sidebar */}
         <Route
           element={
             <PrivateRoute>
@@ -39,13 +40,21 @@ export default function App() {
           <Route path="/turmas/:id" element={<Turma />} />
           <Route path="/alunos" element={<Alunos />} />
           <Route path="/aluno/:id" element={<Aluno />} />
-          <Route path="/lancamento-notas" element={<LancamentoNotas />} />
+
+          {/* Notas — rota aninhada */}
+          <Route path="/notas">
+            <Route index element={<LancamentoNotas />} />
+            <Route path="lancamento-massa" element={<LancamentoMassa />} />
+          </Route>
+
           <Route path="/importar" element={<Importar />} />
           <Route path="/boletins" element={<Boletins />} />
-          <Route path='/disciplinas' element={<Disciplinas />} />
-          <Route path='/areas' element={<Areas />} />
-          <Route path='/boletim/:alunoID' element={<BoletimPage />} />
-          <Route path='/vincular-disciplina' element={<VincularDisciplina />} />
+          <Route path="/disciplinas" element={<Disciplinas />} />
+          <Route path="/areas" element={<Areas />} />
+          <Route path="/boletim/:alunoID" element={<BoletimPage />} />
+          <Route path="/vincular-disciplina" element={<VincularDisciplina />} />
+
+          <Route path="/lancamento-notas" element={<Navigate to="/notas" replace />} />
           <Route path="/etapas" element={<Etapa />} />
           
         </Route>

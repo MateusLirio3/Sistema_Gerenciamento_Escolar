@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useState } from 'react'
 
 const links = [
-  { to: '/', label: 'Home' },
+  { to: '/Dashboard', label: 'Home' },
   { to: '/disciplinas', label: 'Disciplinas' },
   { to: '/Etapa', label: 'Etapa' },
 ]

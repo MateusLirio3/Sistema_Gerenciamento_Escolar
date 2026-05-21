@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useSchoolData, type Turma, type Aluno, type Nota } from '../hooks/useSchoolData'
+import { useSchoolData, type Turma, type Aluno, type Nota, type TurmaDisciplina  } from '../hooks/useSchoolData'
+import { useTurmaProgress } from '../hooks/useTurmaProgress'
 import { LoadingState, ErrorState, EmptyState } from '../components/States'
 import { Pencil, Trash2, Plus, X, Check, AlertCircle } from 'lucide-react'
 
@@ -113,22 +114,14 @@ interface TurmaRowProps {
   turma: Turma
   alunos: Aluno[]
   notas: Nota[]
+  turmaDisciplinas: TurmaDisciplina[]
   onEdit: (turma: Turma) => void
   onDelete: (turma: Turma) => void
 }
 
-function TurmaRow({ turma, alunos, notas, onEdit, onDelete }: TurmaRowProps) {
+function TurmaRow({ turma, alunos, notas, turmaDisciplinas, onEdit, onDelete }: TurmaRowProps) {
   const navigate = useNavigate()
-  const alunosTurma = alunos.filter((a) => a.turma_id === turma.id)
-  const alunosComNota = new Set(
-    notas
-      .filter((n) => alunosTurma.some((a) => a.id === n.aluno_id))
-      .map((n) => n.aluno_id)
-  ).size
-  const progress = alunosTurma.length
-    ? Math.round((alunosComNota / alunosTurma.length) * 100)
-    : 0
-  const pendencias = Math.max(alunosTurma.length - alunosComNota, 0)
+  const [{ alunosTurma, progress, pendencias }] = useTurmaProgress([turma], alunos, notas, turmaDisciplinas)
   const temAlunos = alunosTurma.length > 0
 
   return (
@@ -242,6 +235,9 @@ export default function Turmas() {
   }
 
   // ── Excluir ────────────────────────────────────────────────────────────────
+
+  const turmaDisciplinas = data?.turmaDisciplinas ?? []
+  
   async function handleExcluir() {
     if (modal.type !== 'excluir') return
     setSaving(true)
@@ -289,6 +285,7 @@ export default function Turmas() {
                 turma={turma}
                 alunos={alunos}
                 notas={notas}
+                turmaDisciplinas={turmaDisciplinas}
                 onEdit={(t) => abrirModal({ type: 'editar', turma: t })}
                 onDelete={(t) => abrirModal({ type: 'excluir', turma: t })}
               />

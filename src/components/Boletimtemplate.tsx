@@ -55,62 +55,58 @@ function TabelaArea({
   const conceito = AREAS_CONCEITO.has(titulo);
 
   function AreaLabel({ titulo, linhas }: { titulo: string; linhas: number }) {
-  const canvasRef = React.useRef<HTMLCanvasElement>(null);
-  const altura = linhas * 28;
-  const largura = 16;
+    const canvasRef = React.useRef<HTMLCanvasElement>(null);
+    const altura = linhas * 28;
+    const largura = 16;
 
-  // Quebra o título em linhas de no máximo 3 palavras
-  const palavras = titulo.split(" ");
-  const linhasTexto: string[] = [];
-  for (let i = 0; i < palavras.length; i += 3) {
-    linhasTexto.push(palavras.slice(i, i + 3).join(" "));
+    const palavras = titulo.split(" ");
+    const linhasTexto: string[] = [];
+    for (let i = 0; i < palavras.length; i += 3) {
+      linhasTexto.push(palavras.slice(i, i + 3).join(" "));
+    }
+
+    React.useEffect(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = largura * dpr;
+      canvas.height = altura * dpr;
+      canvas.style.width = `${largura}px`;
+      canvas.style.height = `${altura}px`;
+
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, largura, altura);
+      ctx.font = "bold 6px sans-serif";
+      ctx.fillStyle = "#000000";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      ctx.save();
+      ctx.translate(largura / 2, altura / 2);
+      ctx.rotate(-Math.PI / 2);
+
+      const lineHeight = 7;
+      const totalTextHeight = (linhasTexto.length - 1) * lineHeight;
+
+      linhasTexto.forEach((linha, idx) => {
+        const offsetY = -totalTextHeight / 2 + idx * lineHeight;
+        ctx.fillText(linha, 0, offsetY);
+      });
+
+      ctx.restore();
+    }, [titulo, altura, linhasTexto.join("|")]);
+
+    return (
+      <canvas
+        ref={canvasRef}
+        style={{ display: "block", width: largura, height: altura }}
+      />
+    );
   }
 
-  React.useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = largura * dpr;
-    canvas.height = altura * dpr;
-    canvas.style.width = `${largura}px`;
-    canvas.style.height = `${altura}px`;
-
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, largura, altura);
-    ctx.font = "bold 6px sans-serif";
-    ctx.fillStyle = "#000000";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    ctx.save();
-    ctx.translate(largura / 2, altura / 2);
-    ctx.rotate(-Math.PI / 2);
-
-    // Espaçamento entre linhas de texto (em px, no eixo rotacionado)
-    const lineHeight = 7;
-    const totalTextHeight = (linhasTexto.length - 1) * lineHeight;
-
-    linhasTexto.forEach((linha, idx) => {
-      const offsetY = -totalTextHeight / 2 + idx * lineHeight;
-      ctx.fillText(linha, 0, offsetY);
-    });
-
-    ctx.restore();
-  }, [titulo, altura, linhasTexto.join("|")]);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{ display: "block", width: largura, height: altura }}
-    />
-  );
-}
-
-
-  
   return (
     <table className="w-full border-collapse text-[7.5px] mb-1">
       <thead>
@@ -170,9 +166,6 @@ function TabelaArea({
       <tbody>
         {disciplinas.map((disc, i) => (
           <tr key={disc.disciplina_id}>
-            {/* Célula de área com texto vertical — apenas na primeira linha */}
-
-        
             {i === 0 && (
               <td
                 className="border border-black bg-gray-50 align-middle"
@@ -236,11 +229,10 @@ const BoletimTemplate = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
   const esquerda = areasOrdenadas.slice(0, metade);
   const direita = areasOrdenadas.slice(metade);
 
-  // Verifica se é a 3ª etapa
   const isTerceiraEtapa = etapa === 3;
 
   return (
-    <div  
+    <div
       ref={ref}
       className="bg-white text-black overflow-hidden"
       style={{
@@ -286,7 +278,7 @@ const BoletimTemplate = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
         </div>
       </div>
 
-      {/* ── Barra de resumo completa - Duas colunas ── */}
+      {/* ── Barra de resumo — duas colunas ── */}
       <div className="grid grid-cols-2 gap-1 mb-1.5">
         {/* Coluna da esquerda */}
         <div className="border border-black px-2 py-1" style={{ fontSize: 8 }}>
@@ -305,21 +297,11 @@ const BoletimTemplate = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
               <span className="text-xl font-bold">{resumo.freqGlobal}%</span>
             </div>
 
-            {/* Qtd abaixo da média */}
-            <div className="flex flex-col">
-              <span className="text-gray-600 mb-0.5">Qtd abaixo da média</span>
-              <div className="flex gap-2">
-                {[
-                  { label: "1ª", val: resumo.qtdAbaixoMedia1 },
-                  { label: "2ª", val: resumo.qtdAbaixoMedia2 },
-                  { label: "3ª", val: resumo.qtdAbaixoMedia3 },
-                ].map(({ label, val }) => (
-                  <div key={label} className="flex flex-col items-center">
-                    <span style={{ fontSize: 7 }}>{label}</span>
-                    <span className="text-base font-bold">{val}</span>
-                  </div>
-                ))}
-              </div>
+            {/* Qtd abaixo da média — agora um único valor (médias finais) */}
+            <div className="flex flex-col items-center">
+              <span className="text-gray-600 mb-0.5">Abaixo da média</span>
+              <span className="text-xl font-bold">{resumo.qtdAbaixoMedia}</span>
+              <span style={{ fontSize: 6.5 }} className="text-gray-500">disciplinas</span>
             </div>
           </div>
         </div>
@@ -327,33 +309,13 @@ const BoletimTemplate = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
         {/* Coluna da direita */}
         <div className="border border-black px-2 py-1" style={{ fontSize: 8 }}>
           <div className="flex gap-4 items-start justify-between">
-            {/* C.R - Coeficiente de Rendimento */}
+            {/* C.R - agora único (crCurso) */}
             <div className="flex flex-col">
-              <span className="text-gray-600 mb-0.5">C.R</span>
+              <span className="text-gray-600 mb-0.5">C.R. (Coeficiente de Rendimento)</span>
               <div className="flex gap-2">
-                <div className="flex flex-col items-center rounded px-1.5 py-0.5">
-                  <span style={{ fontSize: 6 }} className="text-gray-500">1º Ano</span>
-                  <span className="text-sm font-bold">
-                    {resumo.crPrimeiroAno !== null ? resumo.crPrimeiroAno.toFixed(1).replace(".", ",") : "-"}
-                  </span>
-                </div>
-                <div className="flex flex-col items-center rounded px-1.5 py-0.5">
-                  <span style={{ fontSize: 6 }} className="text-gray-500">2º Ano</span>
-                  <span className="text-sm font-bold">
-                    {resumo.crSegundoAno !== null ? resumo.crSegundoAno.toFixed(1).replace(".", ",") : "-"}
-                  </span>
-                </div>
-                <div className="flex flex-col items-center rounded px-1.5 py-0.5">
-                  <span style={{ fontSize: 6 }} className="text-gray-500">3º Ano</span>
-                  <span className="text-sm font-bold">
-                    {resumo.crTerceiroAno !== null ? resumo.crTerceiroAno.toFixed(1).replace(".", ",") : "-"}
-                  </span>
-                </div>
                 <div className="flex flex-col items-center rounded px-1.5 py-0.5 border">
                   <span style={{ fontSize: 6 }} className="text-gray-600">Curso</span>
-                  <span className="text-sm font-bold">
-                    {resumo.crCurso !== null ? resumo.crCurso.toFixed(1).replace(".", ",") : "-"}
-                  </span>
+                  <span className="text-sm font-bold">{fmt(resumo.crCurso)}</span>
                 </div>
               </div>
             </div>
@@ -415,7 +377,7 @@ const BoletimTemplate = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
       )}
 
       {/* Rodapé */}
-      <footer className="mt-4 text-center " style={{ fontSize: 7 }}>
+      <footer className="mt-4 text-center" style={{ fontSize: 7 }}>
         <p>Boletim gerado pelo Sistema de Gestão Acadêmica</p>
       </footer>
     </div>
